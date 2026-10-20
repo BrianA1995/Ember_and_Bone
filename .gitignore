@@ -1,0 +1,7 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Local tool settings and plugin update backups (large, machine-specific)
+.claude/
+addons/.godot_ai_update/

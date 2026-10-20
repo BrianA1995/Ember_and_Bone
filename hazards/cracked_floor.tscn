@@ -1,0 +1,22 @@
+[gd_scene format=3 uid="uid://di2chtsgap6xn"]
+
+[ext_resource type="Script" uid="uid://bj46cbqm7exvk" path="res://hazards/cracked_floor.gd" id="1_0qydb"]
+[ext_resource type="Material" uid="uid://c2nmukr2sxnnu" path="res://hazards/cracked_floor_material.tres" id="2_qbhu4"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_tiggl"]
+size = Vector3(4, 0.2, 4)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_kiixw"]
+size = Vector3(4, 0.2, 4)
+
+[node name="CrackedFloor" type="StaticBody3D" unique_id=1599958286]
+script = ExtResource("1_0qydb")
+
+[node name="Mesh" type="MeshInstance3D" parent="." unique_id=656186357]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+material_override = ExtResource("2_qbhu4")
+mesh = SubResource("BoxMesh_tiggl")
+
+[node name="Collision" type="CollisionShape3D" parent="." unique_id=837962007]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+shape = SubResource("BoxShape3D_kiixw")

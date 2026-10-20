@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://4ya2fpbfx5uj"]
+
+[ext_resource type="Script" uid="uid://gh2mjcfa7utx" path="res://debug/cracked_floor_preview.gd" id="1_325oh"]
+
+[node name="CrackedFloorPreview" type="Node3D" unique_id=1917016749]
+script = ExtResource("1_325oh")

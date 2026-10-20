@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://bx1wct6kpft60"]
+
+[ext_resource type="Script" path="res://debug/maze_stress_test.gd" id="1_d2r43"]
+
+[node name="MazeStressTest" type="Node" unique_id=1727548628]
+script = ExtResource("1_d2r43")

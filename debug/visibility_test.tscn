@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://bl3dslopkq7hf"]
+
+[ext_resource type="Script" uid="uid://d0oxq4bkv5tam" path="res://debug/visibility_test.gd" id="1_nysgn"]
+
+[node name="VisibilityTest" type="Node" unique_id=1288670137]
+script = ExtResource("1_nysgn")

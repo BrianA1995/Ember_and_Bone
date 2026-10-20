@@ -1,0 +1,14 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://c2nmukr2sxnnu"]
+
+[ext_resource type="Shader" uid="uid://boqji27gpvs2q" path="res://hazards/cracked_floor.gdshader" id="1_frw66"]
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_frw66")
+shader_parameter/stone_color = Color(0.52, 0.49, 0.44, 1)
+shader_parameter/crack_color = Color(0.015, 0.012, 0.012, 1)
+shader_parameter/danger_color = Color(0.95, 0.2, 0.08, 1)
+shader_parameter/crack_scale = 1.1
+shader_parameter/crack_width = 0.045
+shader_parameter/stress_widening = 0.06
+shader_parameter/danger_glow = 2.5

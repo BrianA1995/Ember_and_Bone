@@ -1,0 +1,36 @@
+[gd_scene format=3 uid="uid://bc31ukybaq7ow"]
+
+[ext_resource type="Script" uid="uid://chg765tq8j6o3" path="res://maze/maze_manager.gd" id="1_lquwl"]
+[ext_resource type="Script" uid="uid://bkareu78i0n0j" path="res://maze/maze_view.gd" id="2_7mycd"]
+[ext_resource type="PackedScene" uid="uid://dwutgs28dejgw" path="res://player/player.tscn" id="3_272bh"]
+[ext_resource type="Script" uid="uid://c14uirl8ai2db" path="res://debug/debug_overlay.gd" id="5_kek77"]
+[ext_resource type="Script" uid="uid://ewxhxkl55e11" path="res://player/camera_rig.gd" id="5_lquwl"]
+[ext_resource type="Script" uid="uid://d0ac5hvdrov47" path="res://lighting/maze_lighting.gd" id="6_7mycd"]
+
+[node name="Main" type="Node3D" unique_id=2055107135]
+
+[node name="MazeManager" type="Node3D" parent="." unique_id=1117179014]
+script = ExtResource("1_lquwl")
+
+[node name="MazeView" type="Node3D" parent="MazeManager" unique_id=1175552960]
+script = ExtResource("2_7mycd")
+
+[node name="Player" parent="." unique_id=1810169285 instance=ExtResource("3_272bh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+
+[node name="DebugOverlay" type="CanvasLayer" parent="." unique_id=2129503173]
+script = ExtResource("5_kek77")
+
+[node name="Label" type="Label" parent="DebugOverlay" unique_id=1124830160]
+offset_left = 12.0
+offset_top = 8.0
+offset_right = 13.0
+offset_bottom = 31.0
+
+[node name="CameraRig" type="Node3D" parent="." unique_id=1943734283]
+script = ExtResource("5_lquwl")
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig" unique_id=1902254492]
+
+[node name="Lighting" type="Node" parent="." unique_id=1128483112]
+script = ExtResource("6_7mycd")

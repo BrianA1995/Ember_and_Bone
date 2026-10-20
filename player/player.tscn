@@ -1,0 +1,54 @@
+[gd_scene format=3 uid="uid://dwutgs28dejgw"]
+
+[ext_resource type="Script" uid="uid://b2vxxu0s7ade3" path="res://player/player.gd" id="1_oul6g"]
+[ext_resource type="Script" uid="uid://ccc3umsj87261" path="res://player/candle.gd" id="2_rkbax"]
+[ext_resource type="Script" uid="uid://15rjwj0ki4if" path="res://player/floor_stamp.gd" id="3_g1dw6"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_rkbax"]
+albedo_color = Color(1, 0.6039216, 0.18039216, 1)
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_g1dw6"]
+radius = 0.35
+height = 1.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_oul6g"]
+albedo_color = Color(1, 0.9490196, 0.7529412, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_rkbax"]
+size = Vector3(0.2, 0.2, 0.35)
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_yw30f"]
+radius = 0.35
+height = 1.6
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_rkbax"]
+size = Vector3(0.14, 0.42, 0.14)
+
+[node name="Player" type="CharacterBody3D" unique_id=1810169285]
+script = ExtResource("1_oul6g")
+
+[node name="Visual" type="MeshInstance3D" parent="." unique_id=2104012349]
+material_override = SubResource("StandardMaterial3D_rkbax")
+mesh = SubResource("CapsuleMesh_g1dw6")
+
+[node name="Nose" type="MeshInstance3D" parent="Visual" unique_id=2076771565]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, -0.4)
+material_override = SubResource("StandardMaterial3D_oul6g")
+mesh = SubResource("BoxMesh_rkbax")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1120881048]
+shape = SubResource("CapsuleShape3D_yw30f")
+
+[node name="Candle" type="Node3D" parent="." unique_id=500977613]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.38, 0.1, -0.35)
+script = ExtResource("2_rkbax")
+
+[node name="CandleCollision" type="CollisionShape3D" parent="." unique_id=660034523]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.38, 0.03, -0.35)
+shape = SubResource("BoxShape3D_rkbax")
+
+[node name="GroundProbe" type="RayCast3D" parent="." unique_id=2096223929]
+target_position = Vector3(0, -1.2, 0)
+
+[node name="FloorStamp" type="Node" parent="." unique_id=1245085177]
+script = ExtResource("3_g1dw6")

@@ -1,0 +1,35 @@
+[gd_scene format=3 uid="uid://dcyanap4biqne"]
+
+[ext_resource type="PackedScene" uid="uid://b50rmofkv3l0m" path="res://pieces/floor.tscn" id="1_kq05d"]
+[ext_resource type="PackedScene" uid="uid://buxda57ixd417" path="res://pieces/ceiling.tscn" id="2_lqhyp"]
+[ext_resource type="PackedScene" uid="uid://c8f7quumriht3" path="res://pieces/wall.tscn" id="3_lqhyp"]
+
+[node name="Cross" type="Node3D" unique_id=1215707881]
+
+[node name="Floor" parent="." unique_id=1353950001 instance=ExtResource("1_kq05d")]
+
+[node name="Ceiling" parent="." unique_id=504577382 instance=ExtResource("2_lqhyp")]
+
+[node name="Wall_N1" parent="." unique_id=738720969 instance=ExtResource("3_lqhyp")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -1, 0, -1.5)
+
+[node name="Wall_N2" parent="." unique_id=2103254847 instance=ExtResource("3_lqhyp")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 1, 0, -1.5)
+
+[node name="Wall_E1" parent="." unique_id=1509028647 instance=ExtResource("3_lqhyp")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0, -1)
+
+[node name="Wall_E2" parent="." unique_id=16503551 instance=ExtResource("3_lqhyp")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0, 1)
+
+[node name="Wall_S1" parent="." unique_id=670492391 instance=ExtResource("3_lqhyp")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -1, 0, 1.5)
+
+[node name="Wall_S2" parent="." unique_id=733246804 instance=ExtResource("3_lqhyp")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 1, 0, 1.5)
+
+[node name="Wall_W1" parent="." unique_id=1747165194 instance=ExtResource("3_lqhyp")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0, -1)
+
+[node name="Wall_W2" parent="." unique_id=2142099899 instance=ExtResource("3_lqhyp")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0, 1)
