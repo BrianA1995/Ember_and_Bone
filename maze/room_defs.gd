@@ -16,16 +16,31 @@ const WALL_SCENE := "res://pieces/wall.tscn"
 ## Replaces a room's floor when the room has a cracked floor (see hazards/cracked_floor.gd).
 const CRACKED_FLOOR_SCENE := "res://hazards/cracked_floor.tscn"
 
-## `weight` is the relative chance of the piece when several fit a cell.
-## `cracks` marks pieces that may be given a cracked floor (design doc: straights and key alcoves).
-## The maze never picks dead_end on purpose (dead ends are made by blocking a doorway);
-## it only appears if nothing else can legally fill a cell and blocking would trap the player.
+## Every kind of room, and how it is drawn and chosen:
+##  scene   the room scene
+##  mask    which sides are open when the room is drawn unrotated (bit 0 = N, 1 = E, 2 = S, 3 = W)
+##  weight  the relative chance of the piece when several fit a cell
+##  cracks  (optional) the room may be given a cracked floor (design doc: straights)
+##  cracked (optional) the room always has a cracked floor (design doc: key alcoves)
+##  special (optional) a rare special room; unlike plain rooms it may have a single opening
+##
+## The maze never picks the plain dead_end on purpose (dead ends are made by blocking a
+## doorway); it only appears if nothing else can legally fill a cell and blocking would trap
+## the player. Special rooms are rolled rarely, so their weights are small.
 const PIECES := {
 	&"dead_end": {"scene": "res://rooms/dead_end.tscn", "mask": 0b0100, "weight": 1.0},
 	&"straight": {"scene": "res://rooms/straight.tscn", "mask": 0b0101, "weight": 3.0, "cracks": true},
 	&"corner": {"scene": "res://rooms/corner.tscn", "mask": 0b0011, "weight": 3.0},
 	&"t_junction": {"scene": "res://rooms/t_junction.tscn", "mask": 0b1110, "weight": 3.0},
 	&"cross": {"scene": "res://rooms/cross.tscn", "mask": 0b1111, "weight": 1.5},
+	# Special rooms. All one cell for now; the doc's echo hall and a larger gate chamber need
+	# rooms bigger than a cell.
+	&"key_alcove": {"scene": "res://rooms/key_alcove.tscn", "mask": 0b0100, "weight": 0.12,
+			"special": true, "cracked": true},
+	&"wax_shrine": {"scene": "res://rooms/wax_shrine.tscn", "mask": 0b0100, "weight": 0.06, "special": true},
+	&"safe_niche": {"scene": "res://rooms/safe_niche.tscn", "mask": 0b0100, "weight": 0.06, "special": true},
+	&"monster_nest": {"scene": "res://rooms/monster_nest.tscn", "mask": 0b0101, "weight": 0.15, "special": true},
+	&"gate_chamber": {"scene": "res://rooms/gate_chamber.tscn", "mask": 0b0100, "weight": 0.03, "special": true},
 }
 
 static var _variants: Array[Dictionary] = []
@@ -42,6 +57,16 @@ static func has_side(mask: int, side: int) -> bool:
 ## True if rooms of this piece may be given a cracked floor.
 static func can_crack(piece: StringName) -> bool:
 	return PIECES[piece].get("cracks", false)
+
+
+## True if rooms of this piece always have a cracked floor.
+static func always_cracked(piece: StringName) -> bool:
+	return PIECES[piece].get("cracked", false)
+
+
+## True for the rare special rooms (key alcove, wax shrine, ...).
+static func is_special(piece: StringName) -> bool:
+	return PIECES[piece].get("special", false)
 
 
 static func exit_count(mask: int) -> int:

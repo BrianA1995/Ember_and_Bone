@@ -24,6 +24,7 @@ var _rng := RandomNumberGenerator.new()
 var _events: Array[Dictionary] = []
 var _checked := {"created": 0, "removed": 0, "blocked": 0}
 var _seen: Array[String] = []
+var _falls := 0
 
 
 func _ready() -> void:
@@ -35,9 +36,13 @@ func _ready() -> void:
 	_player = game.get_node("Player")
 	_candle = _player.get_node("Candle")
 	_view = _manager.view
-	# This test is about the maze changing. A cracked floor would drop the player mid-test, and
-	# has its own test (debug/cracked_floor_test.tscn).
+	# This test is about the maze changing. A cracked floor would drop the player mid-test (the
+	# key alcove always has one, and the test revisits rooms), and has its own test
+	# (debug/cracked_floor_test.tscn). Cracked floors only react to bodies in the "players"
+	# group, so take the test player out of it; it stays a light source.
 	_manager.crack_chance = 0.0
+	_player.remove_from_group("players")
+	_player.fell.connect(func() -> void: _falls += 1)
 	# Rooms must be at their final position when checked, not still rising.
 	_view.rise_time = 0.0
 	_view.seal_time = 0.0
@@ -48,8 +53,10 @@ func _ready() -> void:
 	print("VISIBILITY TEST: %s - %d changes checked (%d rooms created, %d doorways blocked, %d rooms removed), %d seen by the player" % [
 		"PASS" if _seen.is_empty() else "FAIL", total, _checked.created, _checked.blocked,
 		_checked.removed, _seen.size()])
-	print("  candle reach %.1f m (visible out to about %.1f m), dark margin %d cell(s)" % [
-		_candle.light_range(), _visible_distance(), _player.dark_margin])
+	print("  candle reach %.1f m (visible out to about %.1f m), dark margin %d cell(s), player falls %d" % [
+		_candle.light_range(), _visible_distance(), _player.dark_margin, _falls])
+	if _falls > 0:
+		print("  WARNING: the player fell %d time(s); respawning rebuilds the maze and spoils the results" % _falls)
 	for line in _seen.slice(0, 8):
 		print("  SEEN: " + line)
 	get_tree().quit(0 if _seen.is_empty() else 1)

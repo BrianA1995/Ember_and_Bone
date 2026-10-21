@@ -54,7 +54,8 @@ func _lines() -> Array[String]:
 	var player_cell := RoomDefs.world_to_cell(player.global_position) if player else Vector2i.ZERO
 	var lines: Array[String] = [
 		"Seed %d    FPS %d" % [grid.seed_value, Engine.get_frames_per_second()],
-		"Player cell %s    Cells alive %d (lit %d)" % [player_cell, grid.cell_count(), _manager.reveal.lit.size()],
+		"Player cell %s (%s)    Cells alive %d (lit %d)" % [
+			player_cell, grid.get_cell(player_cell).get("piece", "-"), grid.cell_count(), _manager.reveal.lit.size()],
 		"Illegal connections: %d    Open doorways awaiting light: %d    Blocked doorways: %d" % [
 			report.problems.size(), report.pending, grid.sealed_count()],
 		"View: %s    Light: %s    Collapse: %s    Ceilings: %s" % [

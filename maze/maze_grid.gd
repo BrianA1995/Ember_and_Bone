@@ -197,7 +197,8 @@ func candidates(cell: Vector2i, allow_dead_ends := true) -> Array[Dictionary]:
 		var mask: int = variant.mask
 		if mask == 0 or (mask & fixed) != open:
 			continue
-		if not allow_dead_ends and RoomDefs.is_dead_end(mask):
+		# Special rooms (alcoves, shrines) may have one opening; plain dead ends may not.
+		if not allow_dead_ends and RoomDefs.is_dead_end(mask) and not RoomDefs.is_special(variant.piece):
 			continue
 		result.append(variant)
 	return result
@@ -286,7 +287,8 @@ func _place(cell: Vector2i, pool: Array[Dictionary]) -> bool:
 ## The data for a new room from a placement ({piece, rotation, mask}). `cracked` is rolled
 ## here, from the seed, so the same maze always has the same cracked floors.
 func _make_cell(variant: Dictionary, known := 0) -> Dictionary:
-	var cracked: bool = RoomDefs.can_crack(variant.piece) and _rng.randf() < crack_chance
+	var cracked: bool = RoomDefs.always_cracked(variant.piece) \
+			or (RoomDefs.can_crack(variant.piece) and _rng.randf() < crack_chance)
 	return {"piece": variant.piece, "rotation": variant.rotation, "mask": variant.mask,
 			"sealed": 0, "known": known, "cracked": cracked}
 

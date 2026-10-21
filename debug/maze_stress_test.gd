@@ -40,9 +40,18 @@ func _ready() -> void:
 	var back := maxi(total.back_steps, 1)
 	print("MAZE STRESS TEST: %s - %d runs x %d steps, %d failures" % [
 		"PASS" if total.failures == 0 else "FAIL", runs, steps, total.failures])
-	print("  rooms built %d: straight %d%%  corner %d%%  T %d%%  cross %d%%  dead-end piece %d%%" % [
-		total.rooms_built, _pct(total.straight, rooms), _pct(total.corner, rooms),
-		_pct(total.t_junction, rooms), _pct(total.cross, rooms), _pct(total.dead_end_piece, rooms)])
+	var pieces: Dictionary = total.by_piece
+	var special := 0
+	var special_list: Array[String] = []
+	for piece in pieces:
+		if RoomDefs.is_special(piece):
+			special += pieces[piece]
+			special_list.append("%s %d" % [piece, pieces[piece]])
+	print("  rooms built %d: straight %d%%  corner %d%%  T %d%%  cross %d%%  dead-end piece %d%%  special %d%%" % [
+		total.rooms_built, _pct(pieces.get("straight", 0), rooms), _pct(pieces.get("corner", 0), rooms),
+		_pct(pieces.get("t_junction", 0), rooms), _pct(pieces.get("cross", 0), rooms),
+		_pct(pieces.get("dead_end", 0), rooms), _pct(special, rooms)])
+	print("  special rooms built: %s" % ", ".join(special_list))
 	print("  doorways blocked %d (%d left a true dead end)" % [total.blocked, total.blocked_dead_end])
 	print("  walking: dead end %d%%  passage %d%%  junction (a choice) %d%% of time" % [
 		_pct(total.visit_dead, visits), _pct(total.visit_pass, visits), _pct(total.visit_choice, visits)])
@@ -60,8 +69,7 @@ func _ready() -> void:
 
 func _new_stats() -> Dictionary:
 	return {"min_change": 1.0e9, "min_what": "", "player_world": Vector3.ZERO, "measure": false, "failures": 0, "seals": 0, "peak_cells": 0, "rooms_built": 0, "blocked": 0,
-			"blocked_dead_end": 0, "straight": 0, "corner": 0, "t_junction": 0, "cross": 0,
-			"dead_end_piece": 0, "visits": 0, "visit_dead": 0, "visit_pass": 0, "visit_choice": 0,
+			"blocked_dead_end": 0, "by_piece": {}, "visits": 0, "visit_dead": 0, "visit_pass": 0, "visit_choice": 0,
 			"back_steps": 0, "back_changed": 0, "back_dead": 0, "back_choice": 0, "back_trials": 0,
 			"back_diverged": 0}
 
@@ -89,9 +97,7 @@ func _make_grid(map_seed: int, stats: Dictionary) -> MazeGrid:
 		_note_change(stats, _cell_distance(stats.player_world, cell), "created cell %s" % cell)
 		stats.rooms_built += 1
 		var piece: String = grid.get_cell(cell).piece
-		if piece == "dead_end":
-			piece = "dead_end_piece"
-		stats[piece] += 1)
+		stats.by_piece[piece] = stats.by_piece.get(piece, 0) + 1)
 	return grid
 
 

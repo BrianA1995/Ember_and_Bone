@@ -1,0 +1,73 @@
+[gd_scene format=3 uid="uid://ciw63btd1abh"]
+
+[ext_resource type="PackedScene" uid="uid://b50rmofkv3l0m" path="res://pieces/floor.tscn" id="1_6wkrq"]
+[ext_resource type="PackedScene" uid="uid://buxda57ixd417" path="res://pieces/ceiling.tscn" id="2_bc8a6"]
+[ext_resource type="PackedScene" uid="uid://c8f7quumriht3" path="res://pieces/wall.tscn" id="3_4rsnh"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_6wkrq"]
+size = Vector3(1.3, 0.75, 0.55)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_bc8a6"]
+size = Vector3(1.3, 0.75, 0.55)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_4rsnh"]
+top_radius = 0.05
+bottom_radius = 0.07
+height = 0.3
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_iyyuy"]
+top_radius = 0.05
+bottom_radius = 0.07
+height = 0.3
+
+[node name="WaxShrine" type="Node3D" unique_id=1179676791]
+
+[node name="Floor" parent="." unique_id=1353950001 instance=ExtResource("1_6wkrq")]
+
+[node name="Ceiling" parent="." unique_id=504577382 instance=ExtResource("2_bc8a6")]
+
+[node name="Wall_N1" parent="." unique_id=738720969 instance=ExtResource("3_4rsnh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, -1)
+
+[node name="Wall_N2" parent="." unique_id=1318057500 instance=ExtResource("3_4rsnh")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0, -1)
+
+[node name="Wall_E1" parent="." unique_id=2019733462 instance=ExtResource("3_4rsnh")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 1, 0, -0.5)
+
+[node name="Wall_E2" parent="." unique_id=383894060 instance=ExtResource("3_4rsnh")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 1, 0, 0.5)
+
+[node name="Wall_S1" parent="." unique_id=1831959331 instance=ExtResource("3_4rsnh")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -1, 0, 1.5)
+
+[node name="Wall_S2" parent="." unique_id=1390664835 instance=ExtResource("3_4rsnh")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 1, 0, 1.5)
+
+[node name="Wall_W1" parent="." unique_id=1980910506 instance=ExtResource("3_4rsnh")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -1, 0, -0.5)
+
+[node name="Wall_W2" parent="." unique_id=1033582415 instance=ExtResource("3_4rsnh")]
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -1, 0, 0.5)
+
+[node name="PropAltar" type="StaticBody3D" parent="." unique_id=46948951]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.45)
+
+[node name="Mesh" type="MeshInstance3D" parent="PropAltar" unique_id=1582592695]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.375, 0)
+mesh = SubResource("BoxMesh_6wkrq")
+
+[node name="Collision" type="CollisionShape3D" parent="PropAltar" unique_id=779347418]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.375, 0)
+shape = SubResource("BoxShape3D_bc8a6")
+
+[node name="PropHolderLeft" type="MeshInstance3D" parent="." unique_id=1606898758]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0.9, -0.45)
+mesh = SubResource("CylinderMesh_4rsnh")
+
+[node name="PropHolderRight" type="MeshInstance3D" parent="." unique_id=1332878839]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0.9, -0.45)
+mesh = SubResource("CylinderMesh_iyyuy")
+
+[node name="WaxSpawn" type="Marker3D" parent="." unique_id=1567812409]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, -0.45)

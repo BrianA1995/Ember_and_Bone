@@ -18,11 +18,14 @@ extends Node3D
 ## to stand out from the floor. Turn off once the pieces are properly textured.
 @export var color_walls := true
 @export var wall_color := Color(0.22, 0.24, 0.3)
+## The colour of a special room's furnishings (altars, plinths, bones), also a test aid.
+@export var prop_color := Color(0.6, 0.55, 0.45)
 
 var _grid: MazeGrid
 var _rooms: Dictionary = {}
 var _scenes: Dictionary = {}
 var _wall_material: StandardMaterial3D
+var _prop_material: StandardMaterial3D
 
 
 func _ready() -> void:
@@ -72,9 +75,9 @@ func _on_cell_added(cell: Vector2i) -> void:
 	add_child(room)
 	_rooms[cell] = room
 	_apply_ceiling(room)
-	_style(room)
+	style_room(room)
 	if data.cracked:
-		_crack_floor(room)
+		crack_floor(room)
 	if rise_time > 0.0:
 		room.position.y = -rise_depth
 		room.create_tween().tween_property(room, "position:y", 0.0, rise_time) \
@@ -111,7 +114,7 @@ func _on_side_sealed(cell: Vector2i, side: int) -> void:
 		wall.position = spots[i].pos
 		wall.rotation_degrees.y = spots[i].rot
 		room.add_child(wall)
-		_style_wall(wall)
+		_paint(wall, _wall_paint())
 		if seal_time > 0.0:
 			wall.position.y = -rise_depth
 			wall.create_tween().tween_property(wall, "position:y", 0.0, seal_time) \
@@ -130,11 +133,11 @@ func _on_cell_restored(cell: Vector2i) -> void:
 	if room:
 		for mesh in room.find_children("*", "MeshInstance3D", true, false):
 			mesh.material_override = null
-		_style(room)
+		style_room(room)
 
 
 ## Swaps a room's plain floor for a CrackedFloor tile in the same place.
-func _crack_floor(room: Node3D) -> void:
+func crack_floor(room: Node3D) -> void:
 	var plain := room.get_node_or_null("Floor") as Node3D
 	if plain == null:
 		return
@@ -146,21 +149,38 @@ func _crack_floor(room: Node3D) -> void:
 	room.add_child(tile)
 
 
-## Applies the test colouring to a room's walls.
-func _style(room: Node3D) -> void:
+## Applies the test colouring to a room: walls (nodes named Wall*) and furnishings
+## (nodes named Prop*). Public so other scenes, like the room gallery, can use it.
+func style_room(room: Node3D) -> void:
 	for child in room.get_children():
-		if str(child.name).begins_with("Wall"):
-			_style_wall(child)
+		var node_name := str(child.name)
+		if node_name.begins_with("Wall"):
+			_paint(child, _wall_paint())
+		elif node_name.begins_with("Prop"):
+			_paint(child, _prop_paint())
 
 
-func _style_wall(wall: Node) -> void:
+func _paint(node: Node, material: Material) -> void:
 	if not color_walls:
 		return
+	for mesh in node.find_children("*", "MeshInstance3D", true, false):
+		mesh.material_override = material
+	if node is MeshInstance3D:
+		(node as MeshInstance3D).material_override = material
+
+
+func _wall_paint() -> StandardMaterial3D:
 	if _wall_material == null:
 		_wall_material = StandardMaterial3D.new()
 		_wall_material.albedo_color = wall_color
-	for mesh in wall.find_children("*", "MeshInstance3D", true, false):
-		mesh.material_override = _wall_material
+	return _wall_material
+
+
+func _prop_paint() -> StandardMaterial3D:
+	if _prop_material == null:
+		_prop_material = StandardMaterial3D.new()
+		_prop_material.albedo_color = prop_color
+	return _prop_material
 
 
 func _apply_ceiling(room: Node3D) -> void:
