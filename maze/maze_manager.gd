@@ -10,7 +10,8 @@ signal maze_rebuilt
 
 @export var map_seed := 0
 @export var grid_size := Vector2i(21, 21)
-@export var start_piece: StringName = &"cross"
+## The room the run starts in (RoomDefs.PIECES), placed with its origin cell at (0, 0).
+@export var start_piece: StringName = &"start_chamber"
 ## Chance that a doorway the light reaches is blocked by a wall instead of leading on.
 ## A block only goes in if the room keeps at least two other exits (it prunes a branch).
 @export_range(0.0, 1.0, 0.05) var block_chance := 0.2

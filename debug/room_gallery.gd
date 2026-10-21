@@ -5,10 +5,8 @@ extends Node3D
 
 ## Rooms per row.
 @export var columns := 5
-## Metres from the middle of one room to the next.
-@export var spacing := 5.0
-## How tall a view the camera has, in metres. Smaller zooms in.
-@export var view_height := 15.5
+## Metres of empty floor between rooms.
+@export var gap := 1.5
 
 
 func _ready() -> void:
@@ -16,9 +14,20 @@ func _ready() -> void:
 	# The maze's view already knows how to colour rooms for testing; borrow it.
 	var painter := MazeView.new()
 	var index := 0
+	var cursor := Vector2.ZERO
+	var row_depth := 0.0
+	var extent := Vector2.ZERO
 	for piece in RoomDefs.PIECES:
+		var cells: Dictionary = RoomDefs.PIECES[piece].get("cells", {Vector2i.ZERO: 0})
+		var size := _footprint_size(cells)
+		if index % columns == 0 and index > 0:
+			cursor = Vector2(0.0, cursor.y + row_depth + gap)
+			row_depth = 0.0
 		var room := (load(RoomDefs.PIECES[piece].scene) as PackedScene).instantiate() as Node3D
-		room.position = Vector3((index % columns) * spacing, 0.0, floori(float(index) / columns) * spacing)
+		# The room's origin cell is the top-left cell of its footprint unless it has cells above or left of it.
+		var low := _footprint_low(cells)
+		room.position = Vector3(cursor.x + RoomDefs.CELL_SIZE * 0.5 - low.x * RoomDefs.CELL_SIZE, 0.0,
+				cursor.y + RoomDefs.CELL_SIZE * 0.5 - low.y * RoomDefs.CELL_SIZE)
 		add_child(room)
 		painter.style_room(room)
 		if RoomDefs.always_cracked(piece):
@@ -26,19 +35,38 @@ func _ready() -> void:
 		var ceiling := room.get_node_or_null("Ceiling") as Node3D
 		if ceiling:
 			ceiling.visible = false
-		_add_label(room.position, str(piece))
+		_add_label(Vector3(cursor.x + size.x * 0.5, 0.2, cursor.y + size.y + 0.3), str(piece))
+		extent = Vector2(maxf(extent.x, cursor.x + size.x), maxf(extent.y, cursor.y + size.y + 0.8))
+		cursor.x += size.x + gap
+		row_depth = maxf(row_depth, size.y + 0.8)
 		index += 1
 	painter.free()
-	_build_camera(index)
+	_build_camera(extent)
 
 
-func _add_label(room_position: Vector3, text: String) -> void:
+## Width and depth, in metres, of the cells a room covers.
+func _footprint_size(cells: Dictionary) -> Vector2:
+	var low := _footprint_low(cells)
+	var high := Vector2i(-1000, -1000)
+	for offset in cells:
+		high = Vector2i(maxi(high.x, offset.x), maxi(high.y, offset.y))
+	return Vector2(high - low + Vector2i.ONE) * RoomDefs.CELL_SIZE
+
+
+func _footprint_low(cells: Dictionary) -> Vector2i:
+	var low := Vector2i(1000, 1000)
+	for offset in cells:
+		low = Vector2i(mini(low.x, offset.x), mini(low.y, offset.y))
+	return low
+
+
+func _add_label(at: Vector3, text: String) -> void:
 	var label := Label3D.new()
 	label.text = text.replace("_", " ")
 	label.font_size = 56
 	label.pixel_size = 0.01
 	label.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
-	label.position = room_position + Vector3(0.0, 0.2, 2.45)
+	label.position = at
 	label.no_depth_test = true
 	add_child(label)
 
@@ -58,11 +86,10 @@ func _build_lighting() -> void:
 	add_child(sun)
 
 
-func _build_camera(room_count: int) -> void:
-	var rows := ceili(float(room_count) / columns)
+func _build_camera(extent: Vector2) -> void:
 	var camera := Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.size = view_height
-	camera.position = Vector3((mini(room_count, columns) - 1) * spacing * 0.5, 10.0, (rows - 1) * spacing * 0.5)
+	camera.size = maxf(extent.y, extent.x * 9.0 / 16.0) + 2.0
+	camera.position = Vector3(extent.x * 0.5, 10.0, extent.y * 0.5)
 	camera.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
 	add_child(camera)

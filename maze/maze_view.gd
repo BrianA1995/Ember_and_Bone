@@ -56,24 +56,32 @@ func set_hide_ceilings(value: bool) -> void:
 
 
 func room_count() -> int:
-	return _rooms.size()
+	var rooms := {}
+	for room in _rooms.values():
+		rooms[room] = true
+	return rooms.size()
 
 
-## The room node drawn for `cell`, or null.
+## The room node drawn for `cell` (a room bigger than a cell is the same node for each cell it
+## covers), or null.
 func room_at(cell: Vector2i) -> Node3D:
 	return _rooms.get(cell)
 
 
 func _on_cell_added(cell: Vector2i) -> void:
+	# A room bigger than a cell is announced once per cell but built once.
+	if _rooms.has(cell):
+		return
 	var data := _grid.get_cell(cell)
 	var room: Node3D = _scene_for(data.piece).instantiate()
-	room.name = "Cell_%d_%d" % [cell.x, cell.y]
-	room.position = RoomDefs.cell_to_world(cell)
+	room.name = "Cell_%d_%d" % [data.anchor.x, data.anchor.y]
+	room.position = RoomDefs.cell_to_world(data.anchor)
 	room.rotation_degrees.y = 90.0 * data.rotation
 	# Rooms are moved by tweens, not physics ticks, so they must not be interpolated.
 	room.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	add_child(room)
-	_rooms[cell] = room
+	for member in _grid.room_cells(cell):
+		_rooms[member] = room
 	_apply_ceiling(room)
 	style_room(room)
 	if data.cracked:
@@ -89,6 +97,10 @@ func _on_cell_removed(cell: Vector2i) -> void:
 	if room == null:
 		return
 	_rooms.erase(cell)
+	# A room bigger than a cell is told to go once per cell; it only sinks once.
+	if room.has_meta(&"sinking"):
+		return
+	room.set_meta(&"sinking", true)
 	for body in room.find_children("*", "CollisionObject3D", true, false):
 		body.collision_layer = 0
 		body.collision_mask = 0
@@ -104,14 +116,18 @@ func _on_side_sealed(cell: Vector2i, side: int) -> void:
 	var room: Node3D = _rooms.get(cell)
 	if room == null:
 		return
-	var rotation_steps: int = _grid.get_cell(cell).rotation
+	var data := _grid.get_cell(cell)
+	var rotation_steps: int = data.rotation
 	var local_side := (side + rotation_steps) % RoomDefs.SIDE_COUNT
+	# Where this cell sits inside its room, before the room is turned.
+	var local_cell := RoomDefs.rotate_offset(cell - data.anchor, (RoomDefs.SIDE_COUNT - rotation_steps) % RoomDefs.SIDE_COUNT)
+	var cell_origin := Vector3(local_cell.x, 0.0, local_cell.y) * RoomDefs.CELL_SIZE
 	var wall_scene := _scene_at(RoomDefs.WALL_SCENE)
 	var spots := RoomDefs.seal_spots(local_side)
 	for i in spots.size():
 		var wall: Node3D = wall_scene.instantiate()
-		wall.name = "Wall_Seal_%d_%d" % [local_side, i + 1]
-		wall.position = spots[i].pos
+		wall.name = "Wall_Seal_%d_%d_%d_%d" % [local_cell.x, local_cell.y, local_side, i + 1]
+		wall.position = cell_origin + spots[i].pos
 		wall.rotation_degrees.y = spots[i].rot
 		room.add_child(wall)
 		_paint(wall, _wall_paint())

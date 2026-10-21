@@ -4,7 +4,8 @@ extends RefCounted
 ## never through a wall, never diagonally around a corner, never through a blocked doorway.
 ##
 ## A source is {cell: Vector2i, radius: int}. Radius counts cells: 1 lights the source's
-## own cell plus every cell directly connected to it.
+## own cell plus every cell directly connected to it. A room bigger than a cell counts as one
+## cell, so the light reaches the same number of cells beyond its edge from anywhere inside.
 
 
 ## Returns a set (Dictionary of cell -> true). With `reveal` on, the light also decides
@@ -21,8 +22,13 @@ static func compute(grid: MazeGrid, sources: Array, reveal := true) -> Dictionar
 
 
 static func _flood(grid: MazeGrid, origin: Vector2i, radius: int, lit: Dictionary, reveal: bool) -> void:
-	var depth := {origin: 0}
-	var queue: Array[Vector2i] = [origin]
+	# A room bigger than a cell is open inside, so the candle can see across all of it at once:
+	# it counts as one place, and the radius is measured from its edges.
+	var depth := {}
+	var queue: Array[Vector2i] = []
+	for member in grid.room_cells(origin):
+		depth[member] = 0
+		queue.append(member)
 	while not queue.is_empty():
 		var cell: Vector2i = queue.pop_front()
 		lit[cell] = true

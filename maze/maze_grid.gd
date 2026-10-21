@@ -33,7 +33,11 @@ var crack_chance := 0.25
 ## likely: the odds are multiplied by 1 + streak * junction_boost.
 var junction_boost := 0.5
 
-## cell -> {piece, rotation, mask, sealed, known, cracked}. `mask` is how the room is drawn,
+## A room bigger than one cell (RoomDefs `cells`) fills one entry per cell it covers. Every
+## entry has the same piece and `anchor` (the cell its origin sits on); each has its own `mask`.
+## Such a room is built, changed and removed as one.
+##
+## cell -> {piece, rotation, mask, sealed, known, cracked, anchor}. `mask` is how the room is drawn,
 ## `sealed` are sides blocked afterwards; a side is only open if in mask and not sealed.
 ## `cracked` means the room's floor is a CrackedFloor (see hazards/).
 ## `known` are sides that used to lead to a room which has since collapsed: the way back.
@@ -97,8 +101,21 @@ func sealed_count() -> int:
 
 ## Places a specific piece with no checks. Used for the starting room.
 func generate_start(cell: Vector2i, piece: StringName) -> void:
-	_cells[cell] = _make_cell({"piece": piece, "rotation": 0, "mask": RoomDefs.PIECES[piece].mask})
-	cell_added.emit(cell)
+	var cells := RoomDefs.footprint(piece, 0)
+	_store({"piece": piece, "rotation": 0, "cells": cells, "anchor": cell})
+	_announce(cell)
+
+
+## Every cell covered by the room in `cell` (just `cell` for an ordinary room).
+func room_cells(cell: Vector2i) -> Array[Vector2i]:
+	var result: Array[Vector2i] = [cell]
+	var data: Dictionary = _cells.get(cell, {})
+	if data.is_empty() or not RoomDefs.is_multi(data.piece):
+		return result
+	result.clear()
+	for offset in RoomDefs.footprint(data.piece, data.rotation):
+		result.append(data.anchor + offset)
+	return result
 
 
 ## Resolves what lies beyond the open doorway on `side` of `from`: a new room, or a wall
@@ -140,15 +157,18 @@ func reroll_cell(cell: Vector2i) -> bool:
 	if not _cells.has(cell):
 		return false
 	var old: Dictionary = _cells[cell]
+	# A big room stays as it is until it goes.
+	if RoomDefs.is_multi(old.piece):
+		return false
 	var pool: Array[Dictionary] = []
-	for variant in candidates(cell, false):
+	for variant in candidates(cell, false, false):
 		if variant.piece != old.piece or variant.rotation != old.rotation:
 			pool.append(variant)
 	var replaced := false
 	while not pool.is_empty() and not replaced:
 		var pick := _pick_weighted(pool)
 		pool.erase(pick)
-		_cells[cell] = _make_cell(pick, old.known)
+		_store(pick, old.known)
 		replaced = frontier_from(cell) > 0
 	if not replaced:
 		_cells[cell] = old
@@ -161,14 +181,18 @@ func reroll_cell(cell: Vector2i) -> bool:
 func remove_cell(cell: Vector2i) -> void:
 	if not _cells.has(cell):
 		return
+	var members := room_cells(cell)
 	# Neighbours that connected to this room remember the doorway as a way back.
-	for side in RoomDefs.SIDE_COUNT:
-		var back := RoomDefs.opposite(side)
-		var n := neighbor(cell, side)
-		if is_open(cell, side) and is_open(n, back):
-			_cells[n].known |= 1 << back
-	_cells.erase(cell)
-	cell_removed.emit(cell)
+	for member in members:
+		for side in RoomDefs.SIDE_COUNT:
+			var back := RoomDefs.opposite(side)
+			var n := neighbor(member, side)
+			if not members.has(n) and is_open(member, side) and is_open(n, back):
+				_cells[n].known |= 1 << back
+	for member in members:
+		_cells.erase(member)
+	for member in members:
+		cell_removed.emit(member)
 
 
 ## Which sides neighbours already decide. `fixed` bits are decided; `open` (a subset of
@@ -187,21 +211,48 @@ func constraints(cell: Vector2i) -> Dictionary:
 	return {"fixed": fixed, "open": open}
 
 
-## Every room placement that satisfies the neighbours of `cell` and has a way out.
-func candidates(cell: Vector2i, allow_dead_ends := true) -> Array[Dictionary]:
+## Every room placement that satisfies the neighbours of `cell` and has a way out. A placement
+## is {piece, rotation, mask, cells, anchor}: `mask` is what `cell` gets, `anchor` where the
+## room's origin lands. Rooms bigger than a cell are included unless `allow_multi` is off;
+## they need every cell they cover to be empty and to agree with its neighbours.
+func candidates(cell: Vector2i, allow_dead_ends := true, allow_multi := true) -> Array[Dictionary]:
 	var rules := constraints(cell)
-	var fixed: int = rules.fixed
-	var open: int = rules.open
 	var result: Array[Dictionary] = []
 	for variant in RoomDefs.variants():
+		if RoomDefs.is_start_only(variant.piece):
+			continue
+		var shape: Dictionary = variant.cells
+		if shape.size() > 1:
+			if not allow_multi:
+				continue
+			for offset in shape:
+				var anchor: Vector2i = cell - offset
+				if _fits(anchor, shape):
+					result.append({"piece": variant.piece, "rotation": variant.rotation,
+							"mask": shape[offset], "cells": shape, "anchor": anchor})
+			continue
 		var mask: int = variant.mask
-		if mask == 0 or (mask & fixed) != open:
+		if mask == 0 or (mask & rules.fixed) != rules.open:
 			continue
 		# Special rooms (alcoves, shrines) may have one opening; plain dead ends may not.
 		if not allow_dead_ends and RoomDefs.is_dead_end(mask) and not RoomDefs.is_special(variant.piece):
 			continue
-		result.append(variant)
+		result.append({"piece": variant.piece, "rotation": variant.rotation, "mask": mask,
+				"cells": shape, "anchor": cell})
 	return result
+
+
+## Could a room with this footprint sit with its origin on `anchor`? Every cell it covers must
+## be empty, inside the bounds, and agree with the rooms around it.
+func _fits(anchor: Vector2i, shape: Dictionary) -> bool:
+	for offset in shape:
+		var cell: Vector2i = anchor + offset
+		if not in_bounds(cell) or _cells.has(cell):
+			return false
+		var rules := constraints(cell)
+		if (shape[offset] & rules.fixed) != rules.open:
+			return false
+	return true
 
 
 ## Open doorways, anywhere in the maze connected to `start`, that lead to cells not
@@ -235,6 +286,9 @@ func validate() -> Dictionary:
 		var data: Dictionary = _cells[cell]
 		if (data.mask & ~data.sealed) == 0:
 			problems.append("%s has no way out" % cell)
+		for member in room_cells(cell):
+			if not _cells.has(member) or _cells[member].anchor != data.anchor:
+				problems.append("%s is missing part of its room at %s" % [cell, member])
 		for side in RoomDefs.SIDE_COUNT:
 			var open := is_open(cell, side)
 			var n := neighbor(cell, side)
@@ -270,27 +324,45 @@ func _place(cell: Vector2i, pool: Array[Dictionary]) -> bool:
 	if pool.is_empty():
 		push_warning("MazeGrid: no legal room fits cell %s" % cell)
 		return false
-	# Try options in weighted order; _cells[cell] ends up holding the accepted
-	# option, or the last one tried if every option would seal the maze.
+	# Try options in weighted order; the cells end up holding the accepted option, or the
+	# last one tried if every option would seal the maze.
 	var boxed_in := true
+	var pick := {}
 	while not pool.is_empty() and boxed_in:
-		var pick := _pick_weighted(pool)
+		if not pick.is_empty():
+			_unstore(pick)
+		pick = _pick_weighted(pool)
 		pool.erase(pick)
-		_cells[cell] = _make_cell(pick)
+		_store(pick)
 		boxed_in = frontier_from(cell) == 0
 	var placed_mask: int = _cells[cell].mask
 	_rooms_since_junction = 0 if RoomDefs.is_junction(placed_mask) else _rooms_since_junction + 1
-	cell_added.emit(cell)
+	_announce(cell)
 	return true
 
 
-## The data for a new room from a placement ({piece, rotation, mask}). `cracked` is rolled
-## here, from the seed, so the same maze always has the same cracked floors.
-func _make_cell(variant: Dictionary, known := 0) -> Dictionary:
-	var cracked: bool = RoomDefs.always_cracked(variant.piece) \
-			or (RoomDefs.can_crack(variant.piece) and _rng.randf() < crack_chance)
-	return {"piece": variant.piece, "rotation": variant.rotation, "mask": variant.mask,
-			"sealed": 0, "known": known, "cracked": cracked}
+## Tells listeners about every cell of the room now in `cell`.
+func _announce(cell: Vector2i) -> void:
+	for member in room_cells(cell):
+		cell_added.emit(member)
+
+
+## Writes a placement ({piece, rotation, cells, anchor}) into the grid, one entry per cell it
+## covers. `cracked` is rolled here, from the seed, so the same maze always has the same
+## cracked floors.
+func _store(pick: Dictionary, known := 0) -> void:
+	var cracked: bool = RoomDefs.always_cracked(pick.piece) \
+			or (RoomDefs.can_crack(pick.piece) and _rng.randf() < crack_chance)
+	for offset in pick.cells:
+		_cells[pick.anchor + offset] = {"piece": pick.piece, "rotation": pick.rotation,
+				"mask": pick.cells[offset], "sealed": 0, "known": known, "cracked": cracked,
+				"anchor": pick.anchor}
+
+
+## Takes back a placement that was written but not kept.
+func _unstore(pick: Dictionary) -> void:
+	for offset in pick.cells:
+		_cells.erase(pick.anchor + offset)
 
 
 func _pick_weighted(pool: Array[Dictionary]) -> Dictionary:
@@ -303,7 +375,7 @@ func _pick_weighted(pool: Array[Dictionary]) -> Dictionary:
 	var shares: Array[float] = []
 	for variant in pool:
 		var share: float = _weight_of(variant.piece) / per_piece[variant.piece]
-		if RoomDefs.is_junction(variant.mask):
+		if RoomDefs.is_junction(variant.mask) and not RoomDefs.is_multi(variant.piece):
 			share *= junction_factor
 		shares.append(share)
 		total += share

@@ -44,7 +44,10 @@ func update(sources: Array, delta: float) -> void:
 		_reset_timers()
 		return
 	for cell in grid.cells():
-		if lit.has(cell):
+		# A big room can go while we are looping, taking its other cells with it.
+		if not grid.has_cell(cell):
+			continue
+		if _is_lit(cell):
 			_unlit_time.erase(cell)
 			if _cracking.erase(cell):
 				cell_restored.emit(cell)
@@ -52,13 +55,24 @@ func update(sources: Array, delta: float) -> void:
 		var unlit_for: float = _unlit_time.get(cell, 0.0) + delta
 		_unlit_time[cell] = unlit_for
 		if unlit_for >= unlit_delay + crack_duration:
-			_unlit_time.erase(cell)
-			_cracking.erase(cell)
-			_was_visible.erase(cell)
+			for member in grid.room_cells(cell):
+				_unlit_time.erase(member)
+				_cracking.erase(member)
+				_was_visible.erase(member)
 			grid.remove_cell(cell)
 		elif unlit_for >= unlit_delay and not _cracking.has(cell):
 			_cracking[cell] = true
 			cell_cracking.emit(cell)
+
+
+## A room is lit while any of the cells it covers is.
+func _is_lit(cell: Vector2i) -> bool:
+	if lit.has(cell):
+		return true
+	for member in grid.room_cells(cell):
+		if lit.has(member):
+			return true
+	return false
 
 
 ## Rooms the light could reach last update but cannot now are swapped for new ones.
