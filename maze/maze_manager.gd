@@ -23,6 +23,8 @@ signal maze_rebuilt
 @export_range(0.0, 2.0, 0.1) var junction_boost := 0.5
 ## Optional piece -> weight overrides, e.g. {&"corner": 2.0}.
 @export var weights: Dictionary = {}
+## Seconds into the run before the start room's floor gives way. 0 or less: it never does.
+@export var start_collapse_delay := 30.0
 @export_group("Collapse")
 @export var collapse_enabled := true:
 	set = set_collapse_enabled
@@ -33,6 +35,8 @@ signal maze_rebuilt
 
 var grid: MazeGrid
 var reveal: RevealCollapse
+## The countdown to the start room's collapse, or null if it has none.
+var start_collapse: StartCollapse
 
 @onready var view: MazeView = $MazeView
 
@@ -66,6 +70,14 @@ func build(new_seed: int = 0) -> void:
 	view.rise_time = 0.0
 	grid.generate_start(Vector2i.ZERO, start_piece)
 	view.rise_time = rise
+	if start_collapse:
+		start_collapse.queue_free()
+		start_collapse = null
+	if start_collapse_delay > 0.0:
+		start_collapse = StartCollapse.new()
+		start_collapse.delay = start_collapse_delay
+		add_child(start_collapse)
+		start_collapse.start(view, Vector2i.ZERO)
 	maze_rebuilt.emit()
 
 

@@ -66,6 +66,11 @@ func _lines() -> Array[String]:
 		"WASD move   Shift sprint   Mouse look   Wheel zoom   Esc free mouse",
 		"V / 1 2 3 view   R new maze   C collapse   H ceilings   L debug light   E (hold) stamp a cracked floor",
 	]
+	var start := _manager.start_collapse
+	if start and start.phase == StartCollapse.Phase.WAITING:
+		lines.append("Start chamber collapses in %.0f s" % start.seconds_left())
+	elif start and start.phase != StartCollapse.Phase.DONE:
+		lines.append("THE START CHAMBER IS COLLAPSING")
 	var floor_line := _floor_line(player)
 	if not floor_line.is_empty():
 		lines.append(floor_line)

@@ -41,6 +41,8 @@ func _ready() -> void:
 	# (debug/cracked_floor_test.tscn). Cracked floors only react to bodies in the "players"
 	# group, so take the test player out of it; it stays a light source.
 	_manager.crack_chance = 0.0
+	# Likewise the start room's floor collapsing would drop the player (it has its own test).
+	_manager.start_collapse_delay = 0.0
 	_player.remove_from_group("players")
 	_player.fell.connect(func() -> void: _falls += 1)
 	# Rooms must be at their final position when checked, not still rising.

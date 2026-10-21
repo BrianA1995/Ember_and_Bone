@@ -152,17 +152,21 @@ func _on_cell_restored(cell: Vector2i) -> void:
 		style_room(room)
 
 
-## Swaps a room's plain floor for a CrackedFloor tile in the same place.
-func crack_floor(room: Node3D) -> void:
-	var plain := room.get_node_or_null("Floor") as Node3D
-	if plain == null:
-		return
-	var tile: Node3D = _scene_at(RoomDefs.CRACKED_FLOOR_SCENE).instantiate()
-	tile.name = "Floor"
-	tile.transform = plain.transform
-	room.remove_child(plain)
-	plain.free()
-	room.add_child(tile)
+## Swaps each of a room's plain floors (nodes named Floor*; a big room has one per cell) for a
+## CrackedFloor tile in the same place. Returns the tiles.
+func crack_floor(room: Node3D) -> Array[Node3D]:
+	var tiles: Array[Node3D] = []
+	for plain in room.get_children():
+		if not str(plain.name).begins_with("Floor") or plain is CrackedFloor:
+			continue
+		var tile: Node3D = _scene_at(RoomDefs.CRACKED_FLOOR_SCENE).instantiate()
+		tile.name = plain.name
+		tile.transform = (plain as Node3D).transform
+		room.remove_child(plain)
+		plain.free()
+		room.add_child(tile)
+		tiles.append(tile)
+	return tiles
 
 
 ## Applies the test colouring to a room: walls (nodes named Wall*) and furnishings
