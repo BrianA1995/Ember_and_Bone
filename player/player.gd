@@ -35,8 +35,18 @@ signal fell
 @export_group("Falling")
 ## Downward acceleration once the floor is gone, in m/s².
 @export var fall_gravity := 20.0
+## The fastest the body falls, in m/s.
+@export var terminal_speed := 30.0
 ## How far below the floor the body falls before it counts as lost, in metres.
 @export var fall_depth := 12.0
+## A fall that lasts longer than this, in seconds, counts as lost too, so a body can never be
+## left falling forever.
+@export var fall_timeout := 4.0
+## How many physics ticks in a row nothing may be holding the body up before it starts to
+## fall, so one unlucky tick can't drop it.
+@export var fall_after_ticks := 3
+## How far below the feet something still counts as holding the body up, in metres.
+@export var support_reach := 0.15
 ## Put the body back at the start after a fall. A placeholder until falling has real
 ## consequences (design doc: steer to a landing spot, wake far from your team). With this off
 ## the body is simply frozen once it has fallen.
@@ -57,6 +67,8 @@ var _stand_height := 0.8
 var _rig: CameraRig
 var _falling := false
 var _fall_speed := 0.0
+var _fall_time := 0.0
+var _unsupported_ticks := 0
 var _grace_left := 0.0
 
 @onready var _visual: Node3D = $Visual
@@ -100,6 +112,8 @@ func reset_position() -> void:
 	velocity = Vector3.ZERO
 	_falling = false
 	_fall_speed = 0.0
+	_fall_time = 0.0
+	_unsupported_ticks = 0
 	_grace_left = spawn_grace
 	reset_physics_interpolation()
 
@@ -115,9 +129,12 @@ func _walk(delta: float) -> void:
 	move_and_slide()
 	if _grace_left > 0.0:
 		_grace_left -= delta
-	elif not _has_floor():
-		_falling = true
-		_fall_speed = 0.0
+	elif _is_supported():
+		_unsupported_ticks = 0
+	else:
+		_unsupported_ticks += 1
+		if _unsupported_ticks >= fall_after_ticks:
+			_start_falling()
 	if not _falling:
 		# The prisoner walks on the floor; keep the body at standing height so nothing can
 		# push it up or down.
@@ -125,9 +142,15 @@ func _walk(delta: float) -> void:
 	_update_visual(direction, delta)
 
 
-func _has_floor() -> bool:
+## Is something holding the body up? Either the ray from the middle of the body finds floor,
+## or the body itself rests on something just below it. The second check matters: the floor is
+## made of separate slabs, and a ray down the exact seam between two can miss both; and a body
+## standing on the edge of a pit, with its middle over the hole, is still held up.
+func _is_supported() -> bool:
 	_ground_probe.force_raycast_update()
-	return _ground_probe.is_colliding()
+	if _ground_probe.is_colliding():
+		return true
+	return test_move(global_transform, Vector3(0.0, -support_reach, 0.0))
 
 
 ## Turns the body to face where it is going (or where the camera looks, in first person).
@@ -143,14 +166,34 @@ func _update_visual(direction: Vector3, delta: float) -> void:
 
 # --- Falling ---------------------------------------------------------------------------
 
-## No control while falling: the body keeps what sideways speed it had and drops.
+func _start_falling() -> void:
+	_falling = true
+	_fall_speed = 0.0
+	_fall_time = 0.0
+
+
+## No control while falling: the body keeps what sideways speed it had and drops. It ends in
+## one of three ways: it lands on something (control returns), it falls out of sight, or it
+## has been falling too long (both of those count as lost).
 func _fall(delta: float) -> void:
-	_fall_speed += fall_gravity * delta
+	_fall_time += delta
+	_fall_speed = minf(_fall_speed + fall_gravity * delta, terminal_speed)
 	velocity.y = -_fall_speed
 	move_and_slide()
 	_update_visual(Vector3.ZERO, delta)
-	if global_position.y < -fall_depth:
+	if _is_supported():
+		_land()
+	elif global_position.y < -fall_depth or _fall_time > fall_timeout:
 		_land_in_the_void()
+
+
+## The body has come to rest on something: stand up and take control again.
+func _land() -> void:
+	_falling = false
+	_fall_speed = 0.0
+	_unsupported_ticks = 0
+	velocity = Vector3.ZERO
+	global_position.y = _stand_height
 
 
 func _land_in_the_void() -> void:

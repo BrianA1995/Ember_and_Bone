@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://w38ug2s0v8co"]
+
+[ext_resource type="Script" uid="uid://dntybib4wc1n5" path="res://debug/player_fall_test.gd" id="1_lxx8f"]
+
+[node name="PlayerFallTest" type="Node3D" unique_id=1637414975]
+script = ExtResource("1_lxx8f")
