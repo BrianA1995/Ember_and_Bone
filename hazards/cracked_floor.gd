@@ -12,8 +12,8 @@ extends StaticBody3D
 ## "Standing on" means the middle of the body is over the tile. Merely being close beside it,
 ## or having the candle held out over it, does not count.
 ##
-## The tell is visual: the cracks (drawn by hazards/cracked_floor.gdshader) and a slight
-## shake of the tile as it fails. There is no colour cue.
+## The tell is visual: the cracks (drawn by hazards/cracked_floor.gdshader). There is no shake
+## and no colour cue; the tile simply breaks once the cracks have covered it.
 ##
 ## Scene layout (hazards/cracked_floor.tscn): Mesh and Collision. Bodies in the "players"
 ## group are the ones that can stand on it.
@@ -24,8 +24,6 @@ enum State { INTACT, ARMED, COLLAPSED }
 
 ## Seconds of standing, in total, that bring the tile down.
 @export var warning_time := 3.0
-## Largest random shake of the tile as it fails, in metres.
-@export var shake_strength := 0.015
 ## How far stamping alone can spread the cracks (0 to 1). Less than 1: only standing
 ## brings a tile down by cracking.
 @export var stamp_spread := 0.9
@@ -33,6 +31,8 @@ enum State { INTACT, ARMED, COLLAPSED }
 @export var pattern_seed := -1.0
 ## A body whose middle is more than this far above the tile (metres) isn't standing on it.
 @export var stand_height := 2.0
+## Off for a floor that only breaks on a schedule (the start chamber): standing on it does nothing.
+@export var breaks_when_stood_on := true
 
 var state := State.INTACT
 
@@ -41,8 +41,6 @@ var _occupied := false
 var _stand_total := 0.0
 var _spread := 0.0
 var _spread_origin := Vector2.ZERO
-var _stamp := 0.0
-var _mesh_rest := Vector3.ZERO
 
 @onready var _mesh: MeshInstance3D = $Mesh
 @onready var _collision: CollisionShape3D = $Collision
@@ -50,14 +48,13 @@ var _mesh_rest := Vector3.ZERO
 
 func _ready() -> void:
 	add_to_group("cracked_floors")
-	_mesh_rest = _mesh.position
 	# Every tile gets its own crack pattern from the one shared material.
 	var pattern := pattern_seed if pattern_seed >= 0.0 else randf() * 100.0
 	_mesh.set_instance_shader_parameter(&"pattern_seed", pattern)
 
 
 func _physics_process(delta: float) -> void:
-	if state == State.COLLAPSED:
+	if state == State.COLLAPSED or not breaks_when_stood_on:
 		return
 	var standing := _bodies_standing_on_it()
 	_occupied = not standing.is_empty()
@@ -77,8 +74,6 @@ func _process(_delta: float) -> void:
 		return
 	_mesh.set_instance_shader_parameter(&"spread", _spread)
 	_mesh.set_instance_shader_parameter(&"spread_origin", _spread_origin)
-	var shake := shake_strength * _stress()
-	_mesh.position = _mesh_rest + Vector3(randf_range(-shake, shake), 0.0, randf_range(-shake, shake))
 
 
 ## Collapses the tile now.
@@ -91,9 +86,8 @@ func collapse_now() -> void:
 ## far through the stamp it is) and `source` is where the stamper stands: the cracks spread
 ## in from there. The cracks stay when the stamping stops.
 func set_stamping(amount: float, source := Vector3.INF) -> void:
-	_stamp = clampf(amount, 0.0, 1.0)
-	if _stamp > 0.0 and source != Vector3.INF:
-		spread_cracks(source, _stamp * stamp_spread)
+	if amount > 0.0 and source != Vector3.INF:
+		spread_cracks(source, clampf(amount, 0.0, 1.0) * stamp_spread)
 
 
 ## Spreads the cracks out from a world position until they cover `amount` (0 to 1) of the
@@ -135,13 +129,6 @@ func _bodies_standing_on_it() -> Array[Node3D]:
 		if body and is_occupied_by(body):
 			standing.append(body)
 	return standing
-
-
-## How hard the tile is failing, 0 to 1: how much of the standing time is used up while
-## someone is on it, or the stamping if that is more. Zero once they step off.
-func _stress() -> float:
-	var standing := _stand_total / warning_time if state == State.ARMED and _occupied else 0.0
-	return clampf(maxf(standing, _stamp * stamp_spread), 0.0, 1.0)
 
 
 func _collapse() -> void:

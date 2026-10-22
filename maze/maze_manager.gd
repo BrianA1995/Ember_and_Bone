@@ -23,6 +23,10 @@ signal maze_rebuilt
 @export_range(0.0, 2.0, 0.1) var junction_boost := 0.5
 ## Optional piece -> weight overrides, e.g. {&"corner": 2.0}.
 @export var weights: Dictionary = {}
+## A body that falls lands at least this many cells from where it fell (less if there is no room).
+@export var landing_distance := 6
+## Landing rooms stay this many cells inside the edge of the maze.
+@export var landing_margin := 2
 ## Seconds into the run before the start room's floor gives way. 0 or less: it never does.
 @export var start_collapse_delay := 30.0
 @export_group("Collapse")
@@ -87,6 +91,35 @@ func restart() -> void:
 	for node in get_tree().get_nodes_in_group("light_sources"):
 		if node.has_method("reset_position"):
 			node.reset_position()
+
+
+## Where a body that fell ends up: the middle of a new room well away from where it was. The
+## room is built here and now; the maze grows out from it as the light reaches, and the old
+## part of the maze goes dark and collapses behind.
+func landing_point(from: Vector3) -> Vector3:
+	var here := RoomDefs.world_to_cell(from)
+	var inner := grid.bounds.grow(-landing_margin)
+	var far: Array[Vector2i] = []
+	for distance in range(landing_distance, -1, -2):
+		for x in range(inner.position.x, inner.end.x):
+			for y in range(inner.position.y, inner.end.y):
+				var cell := Vector2i(x, y)
+				if maxi(absi(x - here.x), absi(y - here.y)) >= distance and not grid.has_cell(cell):
+					far.append(cell)
+		if not far.is_empty():
+			break
+	far.shuffle()
+	# The room appears fully built: the body lands in it, and a floor rising through it would
+	# shove it around (or drop it again).
+	var rise := view.rise_time
+	view.rise_time = 0.0
+	var spot := from
+	for cell in far:
+		if grid.generate_landing(cell):
+			spot = RoomDefs.cell_to_world(cell)
+			break
+	view.rise_time = rise
+	return spot
 
 
 func set_collapse_enabled(value: bool) -> void:

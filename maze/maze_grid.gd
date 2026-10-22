@@ -140,6 +140,23 @@ func reveal_beyond(from: Vector2i, side: int) -> bool:
 	return _place(cell, pool)
 
 
+## Builds a safe place to land in an empty cell: an ordinary corridor room, never a special
+## room and never a cracked floor. It has no connection to anything yet; the light builds the
+## maze outward from it. False if the cell can't take one.
+func generate_landing(cell: Vector2i) -> bool:
+	if _cells.has(cell) or not in_bounds(cell):
+		return false
+	var pool: Array[Dictionary] = []
+	for variant in candidates(cell, false, false):
+		if not RoomDefs.is_special(variant.piece):
+			pool.append(variant)
+	var saved := crack_chance
+	crack_chance = 0.0
+	var placed := _place(cell, pool)
+	crack_chance = saved
+	return placed
+
+
 ## Rolls a legal room for an empty cell (dead ends allowed). False if nothing fits.
 func generate_cell(cell: Vector2i) -> bool:
 	if _cells.has(cell):

@@ -47,9 +47,9 @@ signal fell
 @export var fall_after_ticks := 3
 ## How far below the feet something still counts as holding the body up, in metres.
 @export var support_reach := 0.15
-## Put the body back at the start after a fall. A placeholder until falling has real
-## consequences (design doc: steer to a landing spot, wake far from your team). With this off
-## the body is simply frozen once it has fallen.
+## Wake the body in a new room far from where it fell after a fall (the maze builds one). A
+## placeholder until falling has real consequences (design doc: steer to a landing spot).
+## With this off the body is simply frozen once it has fallen.
 @export var respawn_after_fall := true
 ## Seconds after spawning during which the floor is trusted to be there, so a floor that
 ## was only just built can't be mistaken for a pit.
@@ -196,11 +196,24 @@ func _land() -> void:
 	global_position.y = _stand_height
 
 
+## Wakes the body in a new room far from where it fell (the maze builds one), or back at the
+## start if there is no maze to ask.
+func _land_somewhere_new() -> void:
+	var manager := get_tree().get_first_node_in_group("maze_manager") as MazeManager
+	if manager == null:
+		reset_position()
+		return
+	var spot := manager.landing_point(global_position)
+	reset_position()
+	global_position = Vector3(spot.x, _stand_height, spot.z)
+	reset_physics_interpolation()
+
+
 func _land_in_the_void() -> void:
 	_falling = false
 	fell.emit()
 	if respawn_after_fall:
-		reset_position()
+		_land_somewhere_new()
 	else:
 		set_physics_process(false)
 

@@ -67,15 +67,13 @@ func _lines() -> Array[String]:
 		"V / 1 2 3 view   R new maze   C collapse   H ceilings   L debug light   E (hold) stamp a cracked floor",
 	]
 	var start := _manager.start_collapse
-	if start and start.phase == StartCollapse.Phase.WAITING:
-		lines.append("Start chamber collapses in %.0f s" % start.seconds_left())
-	elif start and start.phase != StartCollapse.Phase.DONE:
-		lines.append("THE START CHAMBER IS COLLAPSING")
+	if start and start.phase == StartCollapse.Phase.SPREADING:
+		lines.append("Start chamber floor breaks in %.0f s" % start.seconds_left())
 	var floor_line := _floor_line(player)
 	if not floor_line.is_empty():
 		lines.append(floor_line)
 	if _fell_message_left > 0.0:
-		lines.append("YOU FELL: the floor gave way. Back to the start.")
+		lines.append("YOU FELL: the floor gave way. You wake somewhere else.")
 	if not report.problems.is_empty():
 		lines.append("PROBLEM: " + report.problems[0])
 	return lines

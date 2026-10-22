@@ -2,7 +2,7 @@ class_name FloorStamp
 extends Node
 ## Hold the interact key next to a cracked floor tile to stamp it down early (design doc:
 ## "the best way to cut off a chasing Lurker"). It must be a tile you are NOT standing on,
-## within `reach` of your body. While you hold, the tile shakes and its cracks glow; keep
+## within `reach` of your body. While you hold, its cracks spread; keep
 ## holding for `hold_time` and it collapses. Let go early and the effort fades.
 ##
 ## A child of the body that stamps: its parent supplies the position.
