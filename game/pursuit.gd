@@ -24,11 +24,11 @@ extends Node
 
 @export_group("How lost the hunter is")
 ## Seconds until time alone counts for everything.
-@export_range(5.0, 300.0, 1.0, "suffix:s") var ramp_seconds := 60.0
+@export_range(5.0, 300.0, 1.0, "suffix:s") var ramp_seconds := 15.0
 ## Prey this close (in cells) counts for nothing: the hunter isn't lost.
 @export_range(0.0, 30.0, 0.5) var near_cells := 4.0
 ## Prey this far (in cells) counts for everything.
-@export_range(1.0, 60.0, 0.5) var far_cells := 14.0
+@export_range(1.0, 60.0, 0.5) var far_cells := 8.0
 
 @export_group("Maze favours the hunter")
 @export var bias_enabled := true
@@ -36,11 +36,14 @@ extends Node
 @export_range(1.0, 30.0, 0.5) var bias_max := 8.0
 ## Only rooms this close to the hunter (in cells) are nudged, so nobody else's maze changes.
 @export_range(1.0, 20.0, 0.5) var bias_radius_cells := 6.0
+## How much of the maze's habit of walling up doorways is taken away near the hunter: at full
+## pressure, 1.0 means never (0 leaves it as it is).
+@export_range(0.0, 1.0, 0.05) var block_relief := 1.0
 
 @export_group("Guaranteed route")
 @export var route_enabled := true
 ## The pressure at which a route is laid.
-@export_range(0.0, 1.0, 0.05) var route_pressure := 0.7
+@export_range(0.0, 1.0, 0.05) var route_pressure := 0.3
 ## Seconds between re-planning the route as the players move.
 @export_range(0.5, 10.0, 0.5, "suffix:s") var route_refresh := 2.0
 
@@ -64,8 +67,8 @@ var _route_timer := 0.0
 func _ready() -> void:
 	_manager = get_tree().get_first_node_in_group("maze_manager") as MazeManager
 	if _manager:
-		_manager.maze_rebuilt.connect(_bind_grid)
-		_bind_grid()
+		_manager.maze_rebuilt.connect(func() -> void: bind_grid(_manager.grid))
+		bind_grid(_manager.grid)
 
 
 ## Starts (or carries on) a chase. A new hunter starts the clock again. `clock_running` false holds
@@ -107,6 +110,16 @@ func room_weight(cell: Vector2i, mask: int) -> float:
 	return 1.0 + (bias_max - 1.0) * pressure * alignment
 
 
+## How much to ease off blocking doorways beside `cell` (0 none, 1 never block): a doorway walled
+## up ahead of a lost hunter is the cruellest kind of dead end (MazeGrid.easing).
+func room_ease(cell: Vector2i) -> float:
+	if not bias_enabled or pressure <= 0.0 or hunter == null or prey.is_empty():
+		return 0.0
+	if _cell_delta(_hunter_cell, cell).length() > bias_radius_cells:
+		return 0.0
+	return minf(pressure * block_relief, 1.0)
+
+
 func _physics_process(delta: float) -> void:
 	if hunter == null or prey.is_empty() or _grid == null:
 		return
@@ -121,9 +134,12 @@ func _physics_process(delta: float) -> void:
 	_update_route(delta)
 
 
-func _bind_grid() -> void:
-	_grid = _manager.grid
+## Starts helping in `grid` (a new maze starts the count again). The maze manager's grid is bound
+## automatically; this is public for anything that has a grid of its own.
+func bind_grid(grid: MazeGrid) -> void:
+	_grid = grid
 	_grid.guide = room_weight
+	_grid.easing = room_ease
 	lost_time = 0.0
 	pressure = 0.0
 

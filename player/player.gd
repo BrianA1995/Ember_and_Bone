@@ -28,10 +28,15 @@ signal fell
 ## disappear in this unlit ring, so the player never sees the maze change. 0 builds rooms
 ## right at the edge of the light, where the changes can be seen.
 @export_range(0, 3) var dark_margin := 1
-## Where the candle is held, relative to the body when it faces north: out to the right and
+## Where the candle is normally held, relative to the body when it faces north: out to the right and
 ## a little ahead. It swings round with the body, and has its own collision box (CandleCollision)
 ## so the body is stopped before the candle can go into a wall.
 @export var candle_hold := Vector3(0.38, 0.1, -0.35)
+## Where the candle is while the hold-flame button is down: straight ahead and up near eye level,
+## where it is plainly in view (and no farther out than the normal hold, so the light reaches the same).
+@export var candle_raised := Vector3(0.0, 0.42, -0.5)
+## How fast the candle comes up and goes back, in whole lifts per second.
+@export var raise_speed := 6.0
 ## Where the middle of the candle's collision box sits below the wick.
 @export var candle_box_drop := 0.07
 
@@ -71,6 +76,8 @@ const SLOT_COLORS := [
 
 var _start_position: Vector3
 var _stand_height := 0.8
+## How far the candle is raised in front of the face: 0 held at the side, 1 fully up.
+var _raise := 0.0
 var _rig: CameraRig
 var _falling := false
 var _fall_speed := 0.0
@@ -268,7 +275,11 @@ func flame_lean() -> float:
 
 ## Puts the candle, and the collision box around it, where the body is holding it.
 func _hold_candle() -> void:
-	var held := Basis(Vector3.UP, _visual.rotation.y) * candle_hold
+	# While the hold-flame button is down the candle comes up in front of the face, so it is in view.
+	var action := GameInput.action(slot, &"hold_flame")
+	var raising := InputMap.has_action(action) and Input.is_action_pressed(action)
+	_raise = move_toward(_raise, 1.0 if raising else 0.0, get_physics_process_delta_time() * raise_speed)
+	var held := Basis(Vector3.UP, _visual.rotation.y) * candle_hold.lerp(candle_raised, _raise)
 	_candle.position = held
 	_candle_box.position = held - Vector3(0.0, candle_box_drop, 0.0)
 	_candle_box.rotation.y = _visual.rotation.y

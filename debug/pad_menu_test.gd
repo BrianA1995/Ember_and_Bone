@@ -39,10 +39,27 @@ func _play_with_a_pad() -> void:
 	_check("the left stick walks the player", walked > 0.8, "%.2f m" % walked)
 	_check("the right bumper makes the player run", ran > walked * 1.4, "%.2f m vs %.2f m" % [ran, walked])
 	_check("the keyboard does nothing for a gamepad player", not Input.is_action_pressed(&"move_left"), "")
+	var candle: Node3D = player.get_node("Candle")
+	await _frames(10)
+	var at_side := candle.position
+	_pad_button(JOY_BUTTON_LEFT_SHOULDER, true)
+	await _frames(30)
+	var raised := candle.position
+	_pad_button(JOY_BUTTON_LEFT_SHOULDER, false)
+	await _frames(30)
+	# The body may be turned (it just walked sideways), so look at the candle from its own facing.
+	var facing: Node3D = player.get_node("Visual")
+	var ahead := raised.rotated(Vector3.UP, -facing.rotation.y)
+	_check("the left bumper brings the candle up in front of you", absf(ahead.x) < 0.1 and ahead.y > at_side.y + 0.2 and ahead.z < -0.3, "%s -> %s" % [at_side, ahead])
+	_check("and letting go puts it back at your side", candle.position.distance_to(at_side) < 0.05, "%s" % candle.position)
 	game.queue_free()
 	await _frames(2)
 	GameSettings.controllers = GameInput.DEFAULT_DEVICES.duplicate()
 	GameInput.configure(1)
+	var keys := InputMap.action_get_events(&"hold_flame")
+	_check("on the keyboard F or the right mouse button holds the flame up",
+			keys.any(func(e: InputEvent) -> bool: return e is InputEventKey and e.physical_keycode == KEY_F)
+			and keys.any(func(e: InputEvent) -> bool: return e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_RIGHT), "")
 
 
 ## Holds the stick (and bumper) for a second and returns how far the player moved.

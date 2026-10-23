@@ -40,6 +40,9 @@ var junction_boost := 0.5
 ## the answer multiplies that room's chance (1.0 = no opinion). How a hunter is led toward its
 ## prey (see Pursuit). The grid knows nothing about who is asking.
 var guide := Callable()
+## Optional: called as easing.call(cell) -> float, 0 to 1, when a doorway of `cell` could be walled
+## up; at 1 it never is (the chance of blocking is scaled by 1 - the answer).
+var easing := Callable()
 ## Optional: cell -> sides that must be open if a room is built there (a bit mask). A walkable
 ## route laid through empty space ahead of time; rooms that are already built are not touched, and
 ## a side a neighbour has already walled off is left alone.
@@ -149,7 +152,8 @@ func reveal_beyond(from: Vector2i, side: int) -> bool:
 		return false
 	# A doorway on a route is never blocked, any more than one that is the way back.
 	var known: bool = RoomDefs.has_side(_cells[from].known, side) or RoomDefs.has_side(route.get(from, 0), side)
-	if not known and _rng.randf() < block_chance:
+	var eased: float = 1.0 - (easing.call(from) if easing.is_valid() else 0.0)
+	if not known and _rng.randf() < block_chance * eased:
 		var keep_exits := 1 if _rng.randf() < dead_end_chance else 2
 		if _try_seal(from, side, keep_exits):
 			return false
