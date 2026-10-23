@@ -21,6 +21,8 @@ func world_extent() -> Rect2:
 
 ## Where `position` ends up after crossing a seam (unchanged if it is inside the maze).
 func wrapped(position: Vector3) -> Vector3:
+	if manager == null or manager.grid == null or not manager.grid.wrap_edges:
+		return position
 	var extent := world_extent()
 	var result := position
 	for axis in [0, 2]:

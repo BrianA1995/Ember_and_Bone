@@ -140,6 +140,8 @@ func _on_side_sealed(cell: Vector2i, side: int) -> void:
 			wall.position = cell_origin + spots[i].pos
 			wall.rotation_degrees.y = spots[i].rot
 			copy.add_child(wall)
+			if copy != room:
+				_look_only(wall)
 			_paint(wall, _wall_paint())
 			if seal_time > 0.0:
 				wall.position.y = -rise_depth
@@ -243,9 +245,17 @@ func _add_seam_copies(room: Node3D, data: Dictionary) -> void:
 			# The room is turned, so the offset is measured in its own frame.
 			copy.position = offset.rotated(Vector3.UP, -room.rotation.y)
 			room.add_child(copy)
-			for body in copy.find_children("*", "CollisionObject3D", true, false):
-				body.collision_layer = 0
-				body.collision_mask = 0
+			_look_only(copy)
+
+
+## Turns off everything a node's bodies collide with and are collided by.
+func _look_only(node: Node) -> void:
+	var bodies := node.find_children("*", "CollisionObject3D", true, false)
+	if node is CollisionObject3D:
+		bodies.append(node)
+	for body in bodies:
+		body.collision_layer = 0
+		body.collision_mask = 0
 
 
 ## Whether any of `cells` is within `seam_depth` cells of the edge a copy shifted by `shift`

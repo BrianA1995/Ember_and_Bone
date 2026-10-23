@@ -43,13 +43,15 @@ var grid: MazeGrid
 var reveal: RevealCollapse
 ## The countdown to the start room's collapse, or null if it has none.
 var start_collapse: StartCollapse
+## Carries lights across the edges of a wrapping maze.
+var seam: SeamWrap
 
 @onready var view: MazeView = $MazeView
 
 
 func _ready() -> void:
 	add_to_group("maze_manager")
-	var seam := SeamWrap.new()
+	seam = SeamWrap.new()
 	seam.manager = self
 	add_child(seam)
 	build(map_seed)
@@ -137,10 +139,12 @@ func set_collapse_enabled(value: bool) -> void:
 func _light_sources() -> Array:
 	var sources := []
 	for node in get_tree().get_nodes_in_group("light_sources"):
+		# A light a step past an edge, about to be carried across it, already counts as on the far side.
+		var position: Vector3 = seam.wrapped(node.global_position) if seam else node.global_position
 		sources.append({
-			"cell": RoomDefs.world_to_cell(node.global_position),
+			"cell": RoomDefs.world_to_cell(position),
 			"radius": node.light_radius,
-			"position": node.global_position,
+			"position": position,
 			"reach": node.change_distance,
 		})
 	return sources
