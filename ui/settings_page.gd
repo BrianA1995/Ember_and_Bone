@@ -9,8 +9,12 @@ signal back_pressed
 
 const MODE_NAMES := ["Windowed", "Fullscreen (borderless)", "Fullscreen (exclusive)"]
 const SPLIT_NAMES := ["Side by side", "Stacked"]
+## In the order of CameraRig.Mode.
+const VIEW_NAMES := ["Top down", "Third person", "First person"]
 
 var _rows: VBoxContainer
+var _scroll: ScrollContainer
+var _list: VBoxContainer
 var _controls: ControlsPage
 var _mode: OptionButton
 var _resolution: OptionButton
@@ -19,6 +23,9 @@ var _volume: HSlider
 var _sensitivity: HSlider
 var _fov: HSlider
 var _split: OptionButton
+var _start_view_row: HBoxContainer
+var _start_view: OptionButton
+var _game_views: VBoxContainer
 var _maze_size: HSlider
 var _debug: CheckButton
 var _map: CheckButton
@@ -32,12 +39,25 @@ func _ready() -> void:
 	_rows.custom_minimum_size.x = 600
 	add_child(_rows)
 	_rows.add_child(MenuTheme.title("Settings", 40))
+	# The settings scroll if the window is too short to show them all; Back stays in view.
+	_scroll = ScrollContainer.new()
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_list = VBoxContainer.new()
+	_list.add_theme_constant_override("separation", 8)
+	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scroll.add_child(_list)
+	_rows.add_child(_scroll)
 	_mode = _add_options("Display mode", MODE_NAMES, func(i: int) -> void: _change(&"window_mode", i))
 	_resolution = _add_options("Resolution", [], func(i: int) -> void: _change(&"resolution", _resolutions[i]))
 	_vsync = _add_check("Vertical sync", func(on: bool) -> void: _change(&"vsync", on))
 	_volume = _add_slider("Master volume", 0.0, 1.0, 0.05, func(v: float) -> void: _change(&"master_volume", v))
 	_sensitivity = _add_slider("Mouse sensitivity", 0.25, 3.0, 0.05, func(v: float) -> void: _change(&"mouse_sensitivity", v))
 	_fov = _add_slider("Field of view", 60.0, 110.0, 1.0, func(v: float) -> void: _change(&"field_of_view", v))
+	_start_view = _add_options("Starting view", VIEW_NAMES, func(i: int) -> void: _change(&"start_view", i))
+	_start_view_row = _start_view.get_parent()
+	_game_views = VBoxContainer.new()
+	_game_views.add_theme_constant_override("separation", 8)
+	_list.add_child(_game_views)
 	_split = _add_options("Two-player split", SPLIT_NAMES, func(i: int) -> void: _change(&"split_style", i))
 	_maze_size = _add_slider("Maze size (new game)", GameSettings.MAZE_MIN, GameSettings.MAZE_MAX, 1.0,
 			func(v: float) -> void: _change(&"maze_size", int(v)), func(v: float) -> String: return "%d x %d" % [v, v])
@@ -53,7 +73,14 @@ func _ready() -> void:
 		if visible:
 			_show_controls(false)
 			refresh())
+	get_viewport().size_changed.connect(_fit_scroll)
 	refresh()
+
+
+## Makes the list as tall as it needs to be, or as tall as the window allows.
+func _fit_scroll() -> void:
+	var room := get_viewport_rect().size.y - 230.0
+	_scroll.custom_minimum_size = Vector2(0.0, clampf(_list.get_combined_minimum_size().y, 120.0, maxf(room, 120.0)))
 
 
 ## Shows the current settings.
@@ -66,12 +93,43 @@ func refresh() -> void:
 	_sensitivity.value = GameSettings.mouse_sensitivity
 	_fov.value = GameSettings.field_of_view
 	_split.select(GameSettings.split_style)
+	_start_view.select(GameSettings.start_view)
+	_fill_game_views()
 	_maze_size.value = GameSettings.maze_size
 	_debug.button_pressed = GameSettings.show_debug
 	_map.button_pressed = GameSettings.show_map
 	for slider in [_volume, _sensitivity, _fov, _maze_size]:
 		slider.value_changed.emit(slider.value)
 	_loading = false
+	_fit_scroll.call_deferred()
+
+
+## While a game is running, each player's own view is chosen here (and the starting view, which
+## only matters for the next game, is hidden). Without a game, only the starting view shows.
+func _fill_game_views() -> void:
+	for row in _game_views.get_children():
+		_game_views.remove_child(row)
+		row.queue_free()
+	var rigs: Array[CameraRig] = []
+	for node in get_tree().get_nodes_in_group("camera_rig"):
+		rigs.append(node as CameraRig)
+	rigs.sort_custom(func(a: CameraRig, b: CameraRig) -> bool: return a.slot < b.slot)
+	_start_view_row.visible = rigs.is_empty()
+	for rig in rigs:
+		var row := HBoxContainer.new()
+		var label := Label.new()
+		label.text = "Player %d view" % (rig.slot + 1)
+		label.custom_minimum_size.x = 240
+		label.add_theme_color_override("font_color", Player.SLOT_COLORS[rig.slot % Player.SLOT_COLORS.size()])
+		row.add_child(label)
+		var options := OptionButton.new()
+		options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		for view_name in VIEW_NAMES:
+			options.add_item(view_name)
+		options.select(rig.mode)
+		options.item_selected.connect(func(index: int) -> void: rig.set_mode(index as CameraRig.Mode))
+		row.add_child(options)
+		_game_views.add_child(row)
 
 
 func focus_first() -> void:
@@ -121,7 +179,7 @@ func _row(label_text: String) -> HBoxContainer:
 	label.text = label_text
 	label.custom_minimum_size.x = 240
 	row.add_child(label)
-	_rows.add_child(row)
+	_list.add_child(row)
 	return row
 
 

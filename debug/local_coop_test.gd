@@ -12,6 +12,7 @@ func _ready() -> void:
 		await _try_players(count)
 	await _try_pause()
 	await _try_controllers()
+	await _try_views()
 	_check_rects()
 	print("LOCAL COOP TEST: %s" % ("PASS" if _failures == 0 else "FAIL (%d)" % _failures))
 	get_tree().quit(0 if _failures == 0 else 1)
@@ -99,6 +100,39 @@ func _try_controllers() -> void:
 	game.queue_free()
 	await get_tree().process_frame
 	GameSettings.controllers = GameInput.DEFAULT_DEVICES.duplicate()
+	GameInput.configure(1)
+
+
+## The starting view applies to everyone; in a game each player's view is changed on its own.
+func _try_views() -> void:
+	print("-- views")
+	GameSettings.player_count = 2
+	GameSettings.start_view = CameraRig.Mode.FIRST
+	GameInput.configure(2)
+	var game := await _start_game()
+	_check("everyone starts in the chosen view", game.rigs[0].mode == CameraRig.Mode.FIRST and game.rigs[1].mode == CameraRig.Mode.FIRST, "")
+	var pause := game.get_node("PauseMenu") as PauseMenu
+	pause.open()
+	var page: SettingsPage = pause._settings_page
+	page.refresh()
+	_check("in a game the settings list each player's view, not the starting view",
+			page._game_views.get_child_count() == 2 and not page._start_view_row.visible, "%d rows" % page._game_views.get_child_count())
+	var second: OptionButton = page._game_views.get_child(1).get_child(1)
+	second.select(CameraRig.Mode.TOP)
+	second.item_selected.emit(CameraRig.Mode.TOP)
+	_check("changing player 2's view changes only player 2", game.rigs[1].mode == CameraRig.Mode.TOP and game.rigs[0].mode == CameraRig.Mode.FIRST, "")
+	var first: OptionButton = page._game_views.get_child(0).get_child(1)
+	first.item_selected.emit(CameraRig.Mode.THIRD)
+	_check("and player 1's only player 1", game.rigs[0].mode == CameraRig.Mode.THIRD and game.rigs[1].mode == CameraRig.Mode.TOP, "")
+	pause.close()
+	game.queue_free()
+	await get_tree().process_frame
+	var menu_page := SettingsPage.new()
+	add_child(menu_page)
+	await get_tree().process_frame
+	_check("outside a game only the starting view shows", menu_page._start_view_row.visible and menu_page._game_views.get_child_count() == 0, "")
+	menu_page.queue_free()
+	GameSettings.start_view = CameraRig.Mode.TOP
 	GameInput.configure(1)
 
 

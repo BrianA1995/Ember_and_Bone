@@ -19,7 +19,7 @@ const SAVE_PATH := "user://settings.cfg"
 ## Sizes offered in the menu. Only those that fit the screen are listed.
 const RESOLUTIONS: Array[Vector2i] = [
 	Vector2i(1280, 720), Vector2i(1366, 768), Vector2i(1600, 900), Vector2i(1920, 1080),
-	Vector2i(2560, 1440), Vector2i(3840, 2160),
+	Vector2i(2560, 1080), Vector2i(2560, 1440), Vector2i(3440, 1440), Vector2i(3840, 2160),
 ]
 
 var window_mode := WindowMode.WINDOWED
@@ -41,6 +41,9 @@ var show_debug := false
 var player_count := 1
 ## The maze is this many cells wide and tall (it wraps around at the edges).
 var maze_size := 30
+## The view every player starts a game with (a CameraRig.Mode: top down, third person, first
+## person). Once a game is running each player changes their own from the pause menu.
+var start_view := CameraRig.Mode.TOP
 ## Freeplay (just explore), tag (last one standing) or endless tag (see game/tag_mode.gd).
 var game_mode := GameMode.FREEPLAY
 ## Points each player starts a tag round with; being it costs one a second.
@@ -66,9 +69,11 @@ func available_resolutions() -> Array[Vector2i]:
 	for size in RESOLUTIONS:
 		if size.x <= screen.x and size.y <= screen.y:
 			list.append(size)
-	if not list.has(resolution):
-		list.append(resolution)
-		list.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.x < b.x)
+	# The screen's own resolution is always on offer, whatever its shape.
+	for extra in [screen, resolution]:
+		if not list.has(extra):
+			list.append(extra)
+	list.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.x * a.y < b.x * b.y)
 	return list
 
 
@@ -77,7 +82,8 @@ func available_resolutions() -> Array[Vector2i]:
 func render_scale() -> float:
 	if window_mode == WindowMode.WINDOWED:
 		return 1.0
-	return clampf(float(resolution.y) / float(DisplayServer.screen_get_size().y), 0.25, 1.0)
+	var screen := Vector2(DisplayServer.screen_get_size())
+	return clampf(minf(resolution.x / screen.x, resolution.y / screen.y), 0.25, 1.0)
 
 
 ## Applies everything, tells listeners, and saves.
@@ -96,10 +102,9 @@ func apply() -> void:
 	match window_mode:
 		WindowMode.WINDOWED:
 			window.mode = Window.MODE_WINDOWED
-			window.size = resolution
-			var screen := window.current_screen
-			window.position = DisplayServer.screen_get_position(screen) \
-					+ (DisplayServer.screen_get_size(screen) - window.size) / 2
+			_place_window()
+			# Leaving fullscreen takes a moment; the size has to be set again once it is done.
+			_place_window.call_deferred()
 		WindowMode.BORDERLESS:
 			window.mode = Window.MODE_FULLSCREEN
 		WindowMode.EXCLUSIVE:
@@ -126,6 +131,17 @@ func assign_controller(slot: int, device: int) -> void:
 ## Tests run headless; they must not read or change the player's saved settings.
 func _persists() -> bool:
 	return DisplayServer.get_name() != "headless"
+
+
+## Gives the window its size and centres it (windowed mode only).
+func _place_window() -> void:
+	var window := get_window()
+	if window_mode != WindowMode.WINDOWED or window.mode != Window.MODE_WINDOWED:
+		return
+	window.size = resolution
+	var screen := window.current_screen
+	var free_space := DisplayServer.screen_get_size(screen) - window.size
+	window.position = DisplayServer.screen_get_position(screen) + free_space / 2
 
 
 func save_settings() -> void:
@@ -157,4 +173,4 @@ func load_settings() -> void:
 func _keys() -> Array[String]:
 	return ["window_mode", "resolution", "vsync", "master_volume", "mouse_sensitivity",
 			"field_of_view", "split_style", "show_debug", "player_count", "maze_size", "show_map",
-			"controllers", "game_mode", "tag_points"]
+			"controllers", "game_mode", "tag_points", "start_view"]

@@ -71,6 +71,7 @@ func _add_player(slot: int, count: int) -> void:
 	_players_root.add_child(player)
 	var rig := RIG_SCENE.instantiate() as CameraRig
 	rig.slot = slot
+	rig.mode = GameSettings.start_view
 	rig.target = player
 	rig.uses_mouse = GameSettings.controllers[slot] == GameInput.DEVICE_KEYBOARD
 	rig.name = "CameraRig%d" % (slot + 1)

@@ -148,14 +148,14 @@ func _apply_mode() -> void:
 	if mode == Mode.TOP:
 		_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 		_camera.size = top_size
-		if uses_mouse:
+		if uses_mouse and not get_tree().paused:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	else:
 		_camera.projection = Camera3D.PROJECTION_PERSPECTIVE
 		_camera.fov = fov
 		_camera.near = 0.05
 		pitch = deg_to_rad(third_start_pitch) if mode == Mode.THIRD else 0.0
-		if uses_mouse:
+		if uses_mouse and not get_tree().paused:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_update_ceilings()
 	mode_changed.emit(mode)

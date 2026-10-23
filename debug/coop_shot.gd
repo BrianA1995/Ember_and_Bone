@@ -33,6 +33,19 @@ func _ready() -> void:
 			game.get_node("PauseMenu").close()
 		game.queue_free()
 		await _frames(3)
+	GameSettings.game_mode = GameSettings.GameMode.FREEPLAY
+	GameSettings.player_count = 2
+	GameInput.configure(2)
+	var pause_game := (load("res://game/game.tscn") as PackedScene).instantiate()
+	add_child(pause_game)
+	await _frames(20)
+	pause_game.get_node("PauseMenu").open()
+	pause_game.get_node("PauseMenu")._show_settings(true)
+	await _frames(5)
+	_save(dir + "/pause_settings.png")
+	pause_game.get_node("PauseMenu").close()
+	pause_game.queue_free()
+	await _frames(3)
 	GameSettings.game_mode = GameSettings.GameMode.TAG
 	GameSettings.player_count = 2
 	GameInput.configure(2)
