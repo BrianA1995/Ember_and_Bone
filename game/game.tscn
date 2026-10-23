@@ -1,0 +1,34 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://game/local_game.gd" id="1_game"]
+[ext_resource type="Script" path="res://maze/maze_manager.gd" id="2_manager"]
+[ext_resource type="Script" path="res://maze/maze_view.gd" id="3_view"]
+[ext_resource type="Script" path="res://lighting/maze_lighting.gd" id="4_light"]
+[ext_resource type="Script" path="res://game/split_screen.gd" id="5_split"]
+[ext_resource type="Script" path="res://ui/pause_menu.gd" id="6_pause"]
+
+[node name="Game" type="Node3D"]
+script = ExtResource("1_game")
+
+[node name="MazeManager" type="Node3D" parent="."]
+script = ExtResource("2_manager")
+
+[node name="MazeView" type="Node3D" parent="MazeManager"]
+script = ExtResource("3_view")
+
+[node name="Lighting" type="Node" parent="."]
+script = ExtResource("4_light")
+
+[node name="Players" type="Node3D" parent="."]
+
+[node name="Views" type="CanvasLayer" parent="."]
+
+[node name="SplitScreen" type="Control" parent="Views"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("5_split")
+
+[node name="PauseMenu" type="CanvasLayer" parent="."]
+script = ExtResource("6_pause")

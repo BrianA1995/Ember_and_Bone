@@ -12,6 +12,9 @@ extends CharacterBody3D
 ## The body has dropped out of sight through a pit.
 signal fell
 
+## Which local player this is (0-3). Picks the input actions (see GameInput) and the body colour.
+@export var slot := 0
+
 @export_group("Movement")
 @export var walk_speed := 2.5
 @export var sprint_speed := 4.5
@@ -62,6 +65,10 @@ var light_radius := 2
 ## is held out from the body.
 var change_distance := 6.0
 
+## One colour per slot, so players can tell each other apart.
+const SLOT_COLORS := [
+	Color(1.0, 0.60, 0.18), Color(0.35, 0.65, 1.0), Color(0.45, 0.85, 0.45), Color(0.85, 0.40, 0.85)]
+
 var _start_position: Vector3
 var _stand_height := 0.8
 var _rig: CameraRig
@@ -79,6 +86,7 @@ var _grace_left := 0.0
 
 func _ready() -> void:
 	GameInput.ensure_actions()
+	_tint_body()
 	add_to_group("players")
 	add_to_group("light_sources")
 	motion_mode = MOTION_MODE_FLOATING
@@ -98,7 +106,7 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	if _rig == null:
-		_rig = get_tree().get_first_node_in_group("camera_rig") as CameraRig
+		_rig = _find_rig()
 	_hold_candle()
 	if _falling:
 		_fall(delta)
@@ -118,11 +126,31 @@ func reset_position() -> void:
 	reset_physics_interpolation()
 
 
+## The camera rig that follows this body: the one that targets it, else the first there is.
+func _find_rig() -> CameraRig:
+	var first: CameraRig = null
+	for node in get_tree().get_nodes_in_group("camera_rig"):
+		var rig := node as CameraRig
+		if rig.target == self:
+			return rig
+		if first == null:
+			first = rig
+	return first
+
+
+## Gives the body its slot's colour (its own material, so other bodies keep theirs).
+func _tint_body() -> void:
+	var material := (_visual.material_override as StandardMaterial3D).duplicate() as StandardMaterial3D
+	material.albedo_color = SLOT_COLORS[slot % SLOT_COLORS.size()]
+	_visual.material_override = material
+
+
 # --- Walking ---------------------------------------------------------------------------
 
 func _walk(delta: float) -> void:
-	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	var speed := sprint_speed if Input.is_action_pressed("sprint") else walk_speed
+	var input := Input.get_vector(GameInput.action(slot, &"move_left"), GameInput.action(slot, &"move_right"),
+			GameInput.action(slot, &"move_forward"), GameInput.action(slot, &"move_back"))
+	var speed := sprint_speed if Input.is_action_pressed(GameInput.action(slot, &"sprint")) else walk_speed
 	var facing := _rig.movement_basis if _rig else Basis.IDENTITY
 	var direction := facing * Vector3(input.x, 0.0, input.y)
 	velocity = direction * speed

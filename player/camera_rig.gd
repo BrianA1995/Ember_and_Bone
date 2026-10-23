@@ -5,7 +5,12 @@ extends Node3D
 ## 3D views show them. In the 3D views the mouse is captured for looking (Esc releases it,
 ## a click captures it again) and the player moves relative to where the camera faces.
 ##
-## Needs a Camera3D child named "Camera3D". Follows the first node in `target_group`.
+## Needs a Camera3D child named "Camera3D". Follows `target`, or the first node in
+## `target_group` if none is set.
+##
+## With several local players each has a rig (player/camera_rig.tscn); `slot` picks the input
+## actions it listens to (see GameInput). Only slot 0 uses the mouse; the others look with a
+## gamepad stick.
 
 signal mode_changed(new_mode: Mode)
 
@@ -14,6 +19,8 @@ enum Mode { TOP, THIRD, FIRST }
 @export var mode := Mode.TOP:
 	set = set_mode
 @export var target_group := &"players"
+## Which local player this rig belongs to (0-3).
+@export var slot := 0
 @export_group("Top view")
 @export var top_height := 20.0
 @export var top_size := 22.0
@@ -23,6 +30,8 @@ enum Mode { TOP, THIRD, FIRST }
 @export_group("Looking")
 @export var mouse_sensitivity := 0.0025
 @export var fov := 75.0
+## Radians per second at full stick, for gamepad looking.
+@export var stick_look_speed := 2.8
 @export_group("Third person")
 @export var third_distance := 3.2
 @export var third_min_distance := 1.5
@@ -34,6 +43,9 @@ enum Mode { TOP, THIRD, FIRST }
 @export var wall_margin := 0.25
 @export_group("First person")
 @export var eye_height := 0.65
+
+## The body this rig follows (set by whoever builds the rig).
+var target: Node3D
 
 ## Where the camera faces, in radians. 0 faces north (-Z).
 var yaw := 0.0
@@ -55,18 +67,19 @@ func _ready() -> void:
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	_camera = $Camera3D
 	_camera.current = true
-	var target := _find_target()
-	if target:
-		var origin := _origin_of(target)
+	var followed := _find_target()
+	if followed:
+		var origin := _origin_of(followed)
 		_top_position = Vector3(origin.x, top_height, origin.z)
 	_apply_mode()
 
 
 func _process(delta: float) -> void:
-	var target := _find_target()
-	if target == null:
+	var followed := _find_target()
+	if followed == null:
 		return
-	var origin := _origin_of(target)
+	_look_with_stick(delta)
+	var origin := _origin_of(followed)
 	match mode:
 		Mode.TOP:
 			var goal := Vector3(origin.x, top_height, origin.z)
@@ -75,18 +88,20 @@ func _process(delta: float) -> void:
 		Mode.FIRST:
 			_camera.global_transform = Transform3D(_look_basis(), origin + Vector3(0.0, eye_height, 0.0))
 		Mode.THIRD:
-			_camera.global_transform = Transform3D(_look_basis(), _third_person_position(target, origin))
+			_camera.global_transform = Transform3D(_look_basis(), _third_person_position(followed, origin))
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed(&"camera_cycle"):
+	if event.is_action_pressed(GameInput.action(slot, &"camera_cycle")):
 		set_mode(((mode as int) + 1) % Mode.size() as Mode)
-	elif event.is_action_pressed(&"camera_top"):
+	elif event.is_action_pressed(GameInput.action(slot, &"camera_top")):
 		set_mode(Mode.TOP)
-	elif event.is_action_pressed(&"camera_third"):
+	elif event.is_action_pressed(GameInput.action(slot, &"camera_third")):
 		set_mode(Mode.THIRD)
-	elif event.is_action_pressed(&"camera_first"):
+	elif event.is_action_pressed(GameInput.action(slot, &"camera_first")):
 		set_mode(Mode.FIRST)
+	elif slot != 0:
+		return
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		yaw -= event.relative.x * mouse_sensitivity
 		pitch = clampf(pitch - event.relative.y * mouse_sensitivity, deg_to_rad(-85.0), deg_to_rad(85.0))
@@ -102,6 +117,18 @@ func set_mode(value: Mode) -> void:
 		_apply_mode()
 
 
+## Changes the field of view (degrees) of the 3D views, at once.
+func set_fov(degrees: float) -> void:
+	fov = degrees
+	if _camera and mode != Mode.TOP:
+		_camera.fov = fov
+
+
+## The camera, for whoever shows this rig's view (it can be moved into another viewport).
+func get_camera() -> Camera3D:
+	return _camera
+
+
 func mode_name() -> String:
 	return ["Top view", "Third person", "First person"][mode]
 
@@ -114,15 +141,35 @@ func _apply_mode() -> void:
 	if mode == Mode.TOP:
 		_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 		_camera.size = top_size
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		if slot == 0:
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	else:
 		_camera.projection = Camera3D.PROJECTION_PERSPECTIVE
 		_camera.fov = fov
 		_camera.near = 0.05
 		pitch = deg_to_rad(third_start_pitch) if mode == Mode.THIRD else 0.0
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	get_tree().call_group("maze_view", "set_hide_ceilings", mode == Mode.TOP)
+		if slot == 0:
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_update_ceilings()
 	mode_changed.emit(mode)
+
+
+## Ceilings are hidden while any player looks from above (the maze has one set of ceilings).
+func _update_ceilings() -> void:
+	var from_above := false
+	for node in get_tree().get_nodes_in_group("camera_rig"):
+		from_above = from_above or (node as CameraRig).mode == Mode.TOP
+	get_tree().call_group("maze_view", "set_hide_ceilings", from_above)
+
+
+## Turns the view with the gamepad's look stick.
+func _look_with_stick(delta: float) -> void:
+	if mode == Mode.TOP:
+		return
+	var stick := Input.get_vector(GameInput.action(slot, &"look_left"), GameInput.action(slot, &"look_right"),
+			GameInput.action(slot, &"look_up"), GameInput.action(slot, &"look_down"))
+	yaw -= stick.x * stick_look_speed * delta
+	pitch = clampf(pitch - stick.y * stick_look_speed * delta, deg_to_rad(-85.0), deg_to_rad(85.0))
 
 
 func _on_mouse_button(event: InputEventMouseButton) -> void:
@@ -162,6 +209,8 @@ func _third_person_position(target: Node3D, origin: Vector3) -> Vector3:
 
 
 func _find_target() -> Node3D:
+	if is_instance_valid(target):
+		return target
 	return get_tree().get_first_node_in_group(target_group) as Node3D
 
 

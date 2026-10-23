@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Ember_and_Bone"
-run/main_scene="res://main.tscn"
+run/main_scene="res://ui/main_menu.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
@@ -19,6 +19,8 @@ config/icon="res://icon.svg"
 
 MCPRuntimeServer="*res://addons/godot_mcp_toolkit/runtime/mcp_runtime_server.gd"
 _mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
+GameSettings="*res://core/game_settings.gd"
+GameSession="*res://core/game_session.gd"
 
 [display]
 

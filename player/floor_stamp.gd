@@ -19,8 +19,9 @@ var _target: CrackedFloor
 
 
 func _physics_process(delta: float) -> void:
-	var body := get_parent() as Node3D
-	var tile := _find_tile(body) if Input.is_action_pressed(&"interact") else null
+	var body := get_parent() as Player
+	var action := GameInput.action(body.slot, &"interact")
+	var tile := _find_tile(body) if Input.is_action_pressed(action) else null
 	if tile != _target:
 		_release_target()
 		_progress = 0.0
