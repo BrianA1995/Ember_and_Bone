@@ -79,6 +79,9 @@ var _unsupported_ticks := 0
 var _grace_left := 0.0
 
 @onready var _visual: Node3D = $Visual
+## Where the candle is held, relative to the body.
+var _candle_offset := Vector3.ZERO
+
 @onready var _candle: Candle = $Candle
 @onready var _candle_box: CollisionShape3D = $CandleCollision
 @onready var _ground_probe: RayCast3D = $GroundProbe
@@ -95,6 +98,10 @@ func _ready() -> void:
 	# Standing height: the body's feet rest on the floor.
 	var body := $CollisionShape3D.shape as CapsuleShape3D
 	_stand_height = body.height * 0.5
+	_candle.top_level = true
+	_candle.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+	_hold_candle()
+	_candle.global_position = global_transform * _candle_offset
 	light_radius = ceili(candle_reach) + dark_margin
 	_candle.reach_cells = candle_reach
 	change_distance = _candle.visible_distance() + 0.5
@@ -102,6 +109,13 @@ func _ready() -> void:
 	# half a metre out) must stop short of that or the changes become visible.
 	if _candle.light_range() + 0.5 > light_radius * RoomDefs.CELL_SIZE:
 		push_warning("Player: the candle's light reaches rooms that can still change; raise dark_margin")
+
+
+## The candle is drawn from the same interpolated body position the camera follows, every frame.
+## Left to the renderer's own interpolation, its light could be a frame behind the camera when
+## the body is carried across the maze's edge: one black frame.
+func _process(_delta: float) -> void:
+	_candle.global_position = get_global_transform_interpolated() * _candle_offset
 
 
 func _physics_process(delta: float) -> void:
@@ -260,6 +274,6 @@ func _land_in_the_void() -> void:
 ## Puts the candle, and the collision box around it, where the body is holding it.
 func _hold_candle() -> void:
 	var held := Basis(Vector3.UP, _visual.rotation.y) * candle_hold
-	_candle.position = held
+	_candle_offset = held
 	_candle_box.position = held - Vector3(0.0, candle_box_drop, 0.0)
 	_candle_box.rotation.y = _visual.rotation.y

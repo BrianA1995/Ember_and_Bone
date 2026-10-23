@@ -95,11 +95,21 @@ func _in_light(cell: Vector2i, sources: Array) -> bool:
 		if not source.has("position"):
 			return true
 		var position: Vector3 = source.position
-		var gap := Vector2(maxf(absf(position.x - centre.x) - half, 0.0),
-				maxf(absf(position.z - centre.z) - half, 0.0))
+		var gap := Vector2(maxf(_apart(position.x - centre.x, grid.bounds.size.x) - half, 0.0),
+				maxf(_apart(position.z - centre.z, grid.bounds.size.y) - half, 0.0))
 		if gap.length() <= source.reach:
 			return true
 	return false
+
+
+## How far apart two things are along one axis, `delta` metres. In a wrapping maze that axis is
+## a loop of `cells` cells, so the short way round may be across the seam.
+func _apart(delta: float, cells: int) -> float:
+	var apart := absf(delta)
+	if grid.wrap_edges:
+		var span := cells * RoomDefs.CELL_SIZE
+		apart = minf(apart, span - apart)
+	return apart
 
 
 func _reset_timers() -> void:
