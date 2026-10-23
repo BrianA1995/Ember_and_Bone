@@ -1,14 +1,17 @@
 class_name SettingsPage
 extends VBoxContainer
-## The settings screen: display, audio, controls. Reads and writes GameSettings, so it works
-## the same from the main menu and the pause menu. Changes apply at once and are saved when
-## the page is left.
+## The settings screen: display, audio, controls, maze. Reads and writes GameSettings, so it
+## works the same from the main menu and the pause menu. Changes apply at once and are saved
+## when the page is left. The controller page opens inside it; `go_back()` steps out of
+## whichever page is showing.
 
 signal back_pressed
 
 const MODE_NAMES := ["Windowed", "Fullscreen (borderless)", "Fullscreen (exclusive)"]
 const SPLIT_NAMES := ["Side by side", "Stacked"]
 
+var _rows: VBoxContainer
+var _controls: ControlsPage
 var _mode: OptionButton
 var _resolution: OptionButton
 var _vsync: CheckButton
@@ -16,15 +19,19 @@ var _volume: HSlider
 var _sensitivity: HSlider
 var _fov: HSlider
 var _split: OptionButton
+var _maze_size: HSlider
 var _debug: CheckButton
+var _map: CheckButton
 var _resolutions: Array[Vector2i] = []
 var _loading := false
 
 
 func _ready() -> void:
-	add_theme_constant_override("separation", 10)
-	custom_minimum_size.x = 560
-	add_child(MenuTheme.title("Settings", 40))
+	_rows = VBoxContainer.new()
+	_rows.add_theme_constant_override("separation", 8)
+	_rows.custom_minimum_size.x = 600
+	add_child(_rows)
+	_rows.add_child(MenuTheme.title("Settings", 40))
 	_mode = _add_options("Display mode", MODE_NAMES, func(i: int) -> void: _change(&"window_mode", i))
 	_resolution = _add_options("Resolution", [], func(i: int) -> void: _change(&"resolution", _resolutions[i]))
 	_vsync = _add_check("Vertical sync", func(on: bool) -> void: _change(&"vsync", on))
@@ -32,10 +39,19 @@ func _ready() -> void:
 	_sensitivity = _add_slider("Mouse sensitivity", 0.25, 3.0, 0.05, func(v: float) -> void: _change(&"mouse_sensitivity", v))
 	_fov = _add_slider("Field of view", 60.0, 110.0, 1.0, func(v: float) -> void: _change(&"field_of_view", v))
 	_split = _add_options("Two-player split", SPLIT_NAMES, func(i: int) -> void: _change(&"split_style", i))
+	_maze_size = _add_slider("Maze size (new game)", GameSettings.MAZE_MIN, GameSettings.MAZE_MAX, 1.0,
+			func(v: float) -> void: _change(&"maze_size", int(v)), func(v: float) -> String: return "%d x %d" % [v, v])
 	_debug = _add_check("Show debug info", func(on: bool) -> void: _change(&"show_debug", on))
-	add_child(MenuTheme.button("Back", _on_back))
+	_map = _add_check("Show debug map (M)", func(on: bool) -> void: _change(&"show_map", on))
+	_rows.add_child(MenuTheme.button("Controllers...", func() -> void: _show_controls(true)))
+	_rows.add_child(MenuTheme.button("Back", go_back))
+	_controls = ControlsPage.new()
+	_controls.visible = false
+	_controls.back_pressed.connect(func() -> void: _show_controls(false))
+	add_child(_controls)
 	visibility_changed.connect(func() -> void:
 		if visible:
+			_show_controls(false)
 			refresh())
 	refresh()
 
@@ -50,12 +66,34 @@ func refresh() -> void:
 	_sensitivity.value = GameSettings.mouse_sensitivity
 	_fov.value = GameSettings.field_of_view
 	_split.select(GameSettings.split_style)
+	_maze_size.value = GameSettings.maze_size
 	_debug.button_pressed = GameSettings.show_debug
+	_map.button_pressed = GameSettings.show_map
+	for slider in [_volume, _sensitivity, _fov, _maze_size]:
+		slider.value_changed.emit(slider.value)
 	_loading = false
 
 
 func focus_first() -> void:
 	_mode.grab_focus()
+
+
+## One step back: out of the controller page if it is showing, else out of the settings.
+func go_back() -> void:
+	if _controls.visible:
+		_show_controls(false)
+		return
+	GameSettings.save_settings()
+	back_pressed.emit()
+
+
+func _show_controls(shown: bool) -> void:
+	_rows.visible = not shown
+	_controls.visible = shown
+	if shown:
+		_controls.focus_first()
+	else:
+		focus_first()
 
 
 func _fill_resolutions() -> void:
@@ -75,20 +113,15 @@ func _change(key: StringName, value: Variant) -> void:
 	GameSettings.changed.emit()
 
 
-func _on_back() -> void:
-	GameSettings.save_settings()
-	back_pressed.emit()
-
-
 # --- Row builders ----------------------------------------------------------------------
 
 func _row(label_text: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	var label := Label.new()
 	label.text = label_text
-	label.custom_minimum_size.x = 220
+	label.custom_minimum_size.x = 240
 	row.add_child(label)
-	add_child(row)
+	_rows.add_child(row)
 	return row
 
 
@@ -109,7 +142,9 @@ func _add_check(label_text: String, on_toggled: Callable) -> CheckButton:
 	return check
 
 
-func _add_slider(label_text: String, low: float, high: float, step: float, on_changed: Callable) -> HSlider:
+## A slider with its value written beside it; `format` turns the value into that text.
+func _add_slider(label_text: String, low: float, high: float, step: float, on_changed: Callable,
+		format := Callable()) -> HSlider:
 	var slider := HSlider.new()
 	slider.min_value = low
 	slider.max_value = high
@@ -117,10 +152,13 @@ func _add_slider(label_text: String, low: float, high: float, step: float, on_ch
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var value_label := Label.new()
-	value_label.custom_minimum_size.x = 60
+	value_label.custom_minimum_size.x = 90
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	slider.value_changed.connect(func(v: float) -> void:
-		value_label.text = "%.2f" % v if step < 1.0 else "%d" % v)
+		if format.is_valid():
+			value_label.text = format.call(v)
+		else:
+			value_label.text = "%.2f" % v if step < 1.0 else "%d" % v)
 	slider.value_changed.connect(on_changed)
 	var row := _row(label_text)
 	row.add_child(slider)

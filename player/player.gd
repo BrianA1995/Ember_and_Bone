@@ -145,6 +145,15 @@ func _tint_body() -> void:
 	_visual.material_override = material
 
 
+## Moves the body somewhere else in the world in one step (the edge of a wrapping maze), still
+## standing and with its momentum kept. Cameras notice the jump and follow at once.
+func warp_to(position: Vector3) -> void:
+	global_position = position
+	_unsupported_ticks = 0
+	_grace_left = spawn_grace
+	reset_physics_interpolation()
+
+
 # --- Walking ---------------------------------------------------------------------------
 
 func _walk(delta: float) -> void:

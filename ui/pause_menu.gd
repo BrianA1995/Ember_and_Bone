@@ -53,11 +53,11 @@ func close() -> void:
 	Input.mouse_mode = _mouse_mode_for_game()
 
 
-## The mouse is captured while the first player looks around in 3D, free otherwise.
+## The mouse is captured while the player using it looks around in 3D, free otherwise.
 func _mouse_mode_for_game() -> Input.MouseMode:
 	for node in get_tree().get_nodes_in_group("camera_rig"):
 		var rig := node as CameraRig
-		if rig.slot == 0 and rig.mode != CameraRig.Mode.TOP:
+		if rig.uses_mouse and rig.mode != CameraRig.Mode.TOP:
 			return Input.MOUSE_MODE_CAPTURED
 	return Input.MOUSE_MODE_VISIBLE
 
@@ -71,7 +71,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if pause:
 			open()
 	elif _settings_page.visible:
-		_settings_page.back_pressed.emit()
+		_settings_page.go_back()
 	elif pause:
 		close()
 	get_viewport().set_input_as_handled()

@@ -11,6 +11,7 @@ func _ready() -> void:
 	for count in range(1, GameInput.SLOTS + 1):
 		await _try_players(count)
 	await _try_pause()
+	await _try_controllers()
 	_check_rects()
 	print("LOCAL COOP TEST: %s" % ("PASS" if _failures == 0 else "FAIL (%d)" % _failures))
 	get_tree().quit(0 if _failures == 0 else 1)
@@ -74,6 +75,31 @@ func _try_pause() -> void:
 	pause.close()
 	game.queue_free()
 	await get_tree().process_frame
+
+
+## Controllers go where they are assigned, and a device never belongs to two players.
+func _try_controllers() -> void:
+	print("-- controllers")
+	GameSettings.controllers = GameInput.DEFAULT_DEVICES.duplicate()
+	GameSettings.assign_controller(0, GameInput.DEVICE_ARROWS)
+	_check("taking a device someone has swaps it", GameSettings.controllers == [GameInput.DEVICE_ARROWS, GameInput.DEVICE_KEYBOARD, 0, 1], "%s" % [GameSettings.controllers])
+	GameSettings.assign_controller(2, GameInput.DEVICE_NONE)
+	_check("'nobody' can be given to anyone", GameSettings.controllers[2] == GameInput.DEVICE_NONE, "")
+	GameSettings.controllers = [GameInput.DEVICE_NONE, GameInput.DEVICE_KEYBOARD, 3, 1]
+	GameSettings.player_count = 3
+	GameInput.configure(3, GameSettings.controllers)
+	_check("a player with no device has no keys", InputMap.action_get_events(&"move_left").is_empty(), "")
+	_check("the keyboard player has WASD", InputMap.action_get_events(GameInput.action(1, &"move_left")).size() == 1, "")
+	var pad_events := InputMap.action_get_events(GameInput.action(2, &"move_left"))
+	_check("a gamepad player has that gamepad's stick, and only that one",
+			pad_events.size() == 1 and pad_events[0] is InputEventJoypadMotion and pad_events[0].device == 3, "")
+	var game := await _start_game()
+	_check("only the keyboard player's camera uses the mouse",
+			not game.rigs[0].uses_mouse and game.rigs[1].uses_mouse and not game.rigs[2].uses_mouse, "")
+	game.queue_free()
+	await get_tree().process_frame
+	GameSettings.controllers = GameInput.DEFAULT_DEVICES.duplicate()
+	GameInput.configure(1)
 
 
 ## The views cover the window without overlapping.

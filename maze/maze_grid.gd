@@ -4,7 +4,8 @@ extends RefCounted
 ##
 ## Legality rules, enforced when a cell is generated:
 ##  - two touching cells agree: either both open toward each other or both closed
-##  - nothing opens through the outer wall (the edge of `bounds`)
+##  - nothing opens through the outer wall (the edge of `bounds`), unless `wrap_edges` is on: then
+##    the edge is a seam, and the room across it is the one on the opposite side of the maze
 ##  - a new cell always opens toward the cell that revealed it, so every path connects
 ##  - a doorway is never left leading nowhere: it either gets a room or gets blocked
 ##  - nothing is allowed to seal the player's reachable maze with no way onward
@@ -18,6 +19,9 @@ signal cell_removed(cell: Vector2i)
 signal side_sealed(cell: Vector2i, side: int)
 
 var bounds: Rect2i
+## The maze is a loop: walking off one edge comes out on the opposite edge (see SeamWrap, which
+## moves whoever crosses). Rooms bigger than a cell never straddle the seam.
+var wrap_edges := false
 var seed_value: int
 ## Optional piece -> weight overrides; anything missing uses RoomDefs.PIECES.
 var weights: Dictionary = {}
@@ -77,8 +81,17 @@ func in_bounds(cell: Vector2i) -> bool:
 	return bounds.has_point(cell)
 
 
+## The cell next to `cell` on `side`; across the seam when the maze wraps.
 func neighbor(cell: Vector2i, side: int) -> Vector2i:
-	return cell + RoomDefs.DIRS[side]
+	return wrap_cell(cell + RoomDefs.DIRS[side])
+
+
+## `cell` brought back inside the bounds, if the maze wraps (otherwise unchanged).
+func wrap_cell(cell: Vector2i) -> Vector2i:
+	if not wrap_edges:
+		return cell
+	return bounds.position + Vector2i(posmod(cell.x - bounds.position.x, bounds.size.x),
+			posmod(cell.y - bounds.position.y, bounds.size.y))
 
 
 ## True if you can walk through this side of the cell (drawn open and not blocked).

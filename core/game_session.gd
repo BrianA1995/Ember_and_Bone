@@ -8,7 +8,7 @@ const GAME_SCENE := "res://game/game.tscn"
 
 ## Starts a game for GameSettings.player_count local players.
 func start_game() -> void:
-	GameInput.configure(GameSettings.player_count)
+	GameInput.configure(GameSettings.player_count, GameSettings.controllers)
 	get_tree().paused = false
 	get_tree().change_scene_to_file(GAME_SCENE)
 

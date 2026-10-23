@@ -9,8 +9,8 @@ extends Node3D
 ## `target_group` if none is set.
 ##
 ## With several local players each has a rig (player/camera_rig.tscn); `slot` picks the input
-## actions it listens to (see GameInput). Only slot 0 uses the mouse; the others look with a
-## gamepad stick.
+## actions it listens to (see GameInput). Only one rig (`uses_mouse`, the player on the
+## keyboard) uses the mouse; the others look with a gamepad stick.
 
 signal mode_changed(new_mode: Mode)
 
@@ -21,12 +21,17 @@ enum Mode { TOP, THIRD, FIRST }
 @export var target_group := &"players"
 ## Which local player this rig belongs to (0-3).
 @export var slot := 0
+## Whether this rig turns with the mouse (and captures it in the 3D views).
+@export var uses_mouse := true
 @export_group("Top view")
 @export var top_height := 20.0
 @export var top_size := 22.0
 @export var top_min_size := 8.0
 @export var top_max_size := 60.0
 @export var top_follow_speed := 8.0
+## A jump of the target further than this, in metres, moves the top view there at once instead
+## of sliding across the maze.
+@export var snap_distance := 30.0
 @export_group("Looking")
 @export var mouse_sensitivity := 0.0025
 @export var fov := 75.0
@@ -83,6 +88,8 @@ func _process(delta: float) -> void:
 	match mode:
 		Mode.TOP:
 			var goal := Vector3(origin.x, top_height, origin.z)
+			if _top_position.distance_to(goal) > snap_distance:
+				_top_position = goal
 			_top_position = _top_position.lerp(goal, 1.0 - exp(-top_follow_speed * delta))
 			_camera.global_transform = Transform3D(Basis.from_euler(Vector3(-PI / 2.0, 0.0, 0.0)), _top_position)
 		Mode.FIRST:
@@ -100,7 +107,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		set_mode(Mode.THIRD)
 	elif event.is_action_pressed(GameInput.action(slot, &"camera_first")):
 		set_mode(Mode.FIRST)
-	elif slot != 0:
+	elif not uses_mouse:
 		return
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		yaw -= event.relative.x * mouse_sensitivity
@@ -141,14 +148,14 @@ func _apply_mode() -> void:
 	if mode == Mode.TOP:
 		_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 		_camera.size = top_size
-		if slot == 0:
+		if uses_mouse:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	else:
 		_camera.projection = Camera3D.PROJECTION_PERSPECTIVE
 		_camera.fov = fov
 		_camera.near = 0.05
 		pitch = deg_to_rad(third_start_pitch) if mode == Mode.THIRD else 0.0
-		if slot == 0:
+		if uses_mouse:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_update_ceilings()
 	mode_changed.emit(mode)

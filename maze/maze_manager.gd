@@ -10,6 +10,8 @@ signal maze_rebuilt
 
 @export var map_seed := 0
 @export var grid_size := Vector2i(21, 21)
+## The maze is a loop: leaving one edge comes out on the opposite one (see SeamWrap).
+@export var wrap_edges := false
 ## The room the run starts in (RoomDefs.PIECES), placed with its origin cell at (0, 0).
 @export var start_piece: StringName = &"start_chamber"
 ## Chance that a doorway the light reaches is blocked by a wall instead of leading on.
@@ -47,6 +49,9 @@ var start_collapse: StartCollapse
 
 func _ready() -> void:
 	add_to_group("maze_manager")
+	var seam := SeamWrap.new()
+	seam.manager = self
+	add_child(seam)
 	build(map_seed)
 
 
@@ -63,6 +68,7 @@ func build(new_seed: int = 0) -> void:
 	grid.dead_end_chance = dead_end_chance
 	grid.crack_chance = crack_chance
 	grid.junction_boost = junction_boost
+	grid.wrap_edges = wrap_edges
 	reveal = RevealCollapse.new(grid)
 	reveal.collapse_enabled = collapse_enabled
 	reveal.unlit_delay = unlit_delay

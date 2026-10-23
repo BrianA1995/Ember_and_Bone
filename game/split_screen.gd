@@ -52,6 +52,11 @@ func add_view(camera: Camera3D, slot: int, color: Color) -> void:
 	apply_settings()
 
 
+## The area of view `index`, for drawing something over that player's view only.
+func pane_at(index: int) -> Control:
+	return _panes[index]
+
+
 ## How many views there are.
 func view_count() -> int:
 	return _panes.size()

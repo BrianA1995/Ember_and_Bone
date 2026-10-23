@@ -7,7 +7,14 @@ signal changed
 
 enum WindowMode { WINDOWED, BORDERLESS, EXCLUSIVE }
 enum SplitStyle { SIDE_BY_SIDE, STACKED }
+enum GameMode { FREEPLAY, TAG, ENDLESS_TAG }
 
+## Tag needs somebody to chase.
+const TAG_MIN_PLAYERS := 2
+const TAG_POINTS_MIN := 10
+const TAG_POINTS_MAX := 600
+const MAZE_MIN := 20
+const MAZE_MAX := 100
 const SAVE_PATH := "user://settings.cfg"
 ## Sizes offered in the menu. Only those that fit the screen are listed.
 const RESOLUTIONS: Array[Vector2i] = [
@@ -32,10 +39,22 @@ var split_style := SplitStyle.SIDE_BY_SIDE
 var show_debug := false
 ## How many local players the next game has (1-4).
 var player_count := 1
+## The maze is this many cells wide and tall (it wraps around at the edges).
+var maze_size := 30
+## Freeplay (just explore), tag (last one standing) or endless tag (see game/tag_mode.gd).
+var game_mode := GameMode.FREEPLAY
+## Points each player starts a tag round with; being it costs one a second.
+var tag_points := 100
+## The debug map of the whole maze (M toggles it).
+var show_map := false
+## What each player (slot 0-3) plays with: GameInput.DEVICE_KEYBOARD, DEVICE_ARROWS, DEVICE_NONE,
+## or the id of a gamepad (0, 1, ...).
+var controllers: Array = GameInput.DEFAULT_DEVICES.duplicate()
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	GameInput.ensure_menu_buttons()
 	load_settings()
 	apply()
 
@@ -87,7 +106,31 @@ func apply() -> void:
 			window.mode = Window.MODE_EXCLUSIVE_FULLSCREEN
 
 
+## Tag can't be played alone: it takes at least two players.
+func enforce_mode_rules() -> void:
+	if game_mode != GameMode.FREEPLAY:
+		player_count = maxi(player_count, TAG_MIN_PLAYERS)
+
+
+## Gives `slot` the device. If another player already has it, that player takes the device
+## `slot` had, so no two players share one controller.
+func assign_controller(slot: int, device: int) -> void:
+	var old: int = controllers[slot]
+	if device != GameInput.DEVICE_NONE:
+		for other in GameInput.SLOTS:
+			if other != slot and controllers[other] == device:
+				controllers[other] = old
+	controllers[slot] = device
+
+
+## Tests run headless; they must not read or change the player's saved settings.
+func _persists() -> bool:
+	return DisplayServer.get_name() != "headless"
+
+
 func save_settings() -> void:
+	if not _persists():
+		return
 	var file := ConfigFile.new()
 	for key in _keys():
 		file.set_value("settings", key, get(key))
@@ -95,6 +138,8 @@ func save_settings() -> void:
 
 
 func load_settings() -> void:
+	if not _persists():
+		return
 	var file := ConfigFile.new()
 	if file.load(SAVE_PATH) != OK:
 		return
@@ -102,8 +147,14 @@ func load_settings() -> void:
 		if file.has_section_key("settings", key):
 			set(key, file.get_value("settings", key))
 	player_count = clampi(player_count, 1, GameInput.SLOTS)
+	maze_size = clampi(maze_size, MAZE_MIN, MAZE_MAX)
+	tag_points = clampi(tag_points, TAG_POINTS_MIN, TAG_POINTS_MAX)
+	enforce_mode_rules()
+	if controllers.size() != GameInput.SLOTS:
+		controllers = GameInput.DEFAULT_DEVICES.duplicate()
 
 
 func _keys() -> Array[String]:
 	return ["window_mode", "resolution", "vsync", "master_volume", "mouse_sensitivity",
-			"field_of_view", "split_style", "show_debug", "player_count"]
+			"field_of_view", "split_style", "show_debug", "player_count", "maze_size", "show_map",
+			"controllers", "game_mode", "tag_points"]

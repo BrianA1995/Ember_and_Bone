@@ -15,14 +15,25 @@ const DEBUG_SCRIPT := preload("res://debug/debug_overlay.gd")
 const SPAWN_HEIGHT := 0.9
 const SPAWN_SPREAD := 0.8
 
+## The tag rules, in a tag game (null in freeplay).
+var tag: TagMode
 var players: Array[Player] = []
 var rigs: Array[CameraRig] = []
 
 var _debug_layer: CanvasLayer
+var _map_layer: CanvasLayer
+var _devices: Array = []
 var _base_sensitivity := 0.0025
 
 @onready var _players_root: Node3D = $Players
 @onready var _split: SplitScreen = $Views/SplitScreen
+
+
+## The maze takes its size from the settings, and wraps, before it builds itself (its _ready).
+func _enter_tree() -> void:
+	var manager := $MazeManager as MazeManager
+	manager.grid_size = Vector2i(GameSettings.maze_size, GameSettings.maze_size)
+	manager.wrap_edges = true
 
 
 func _ready() -> void:
@@ -31,6 +42,9 @@ func _ready() -> void:
 	for slot in GameSettings.player_count:
 		_add_player(slot, GameSettings.player_count)
 	_add_debug_overlay()
+	_add_map()
+	if GameSettings.game_mode != GameSettings.GameMode.FREEPLAY:
+		_add_tag()
 	GameSettings.changed.connect(_apply_settings)
 	_apply_settings()
 
@@ -58,6 +72,7 @@ func _add_player(slot: int, count: int) -> void:
 	var rig := RIG_SCENE.instantiate() as CameraRig
 	rig.slot = slot
 	rig.target = player
+	rig.uses_mouse = GameSettings.controllers[slot] == GameInput.DEVICE_KEYBOARD
 	rig.name = "CameraRig%d" % (slot + 1)
 	add_child(rig)
 	_split.add_view(rig.get_camera(), slot, Player.SLOT_COLORS[slot])
@@ -76,7 +91,42 @@ func _add_debug_overlay() -> void:
 	add_child(_debug_layer)
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed(GameInput.TOGGLE_MAP):
+		GameSettings.show_map = not GameSettings.show_map
+		GameSettings.commit()
+
+
+## Tag: rules, a readout in every pane, and a results screen when one player is left.
+## A new maze (from the pause menu) starts a new round.
+func _add_tag() -> void:
+	tag = TagMode.new()
+	tag.eliminate = GameSettings.game_mode == GameSettings.GameMode.TAG
+	add_child(tag)
+	tag.setup(players, _split, GameSettings.tag_points)
+	tag.round_over.connect(func(standings: Array) -> void:
+		var results := TagResults.new()
+		add_child(results)
+		results.show_results(standings))
+	($MazeManager as MazeManager).maze_rebuilt.connect(tag.reset)
+
+
+## The debug map of the maze, shown if the settings ask for it.
+func _add_map() -> void:
+	_map_layer = CanvasLayer.new()
+	_map_layer.layer = 5
+	_map_layer.add_child(MazeMap.new())
+	add_child(_map_layer)
+
+
 func _apply_settings() -> void:
+	# Controllers can be changed from the pause menu.
+	if _devices != GameSettings.controllers:
+		_devices = GameSettings.controllers.duplicate()
+		GameInput.configure(players.size(), _devices)
+		for i in rigs.size():
+			rigs[i].uses_mouse = _devices[i] == GameInput.DEVICE_KEYBOARD
+	_map_layer.visible = GameSettings.show_map
 	for rig in rigs:
 		rig.mouse_sensitivity = _base_sensitivity * GameSettings.mouse_sensitivity
 		rig.set_fov(GameSettings.field_of_view)

@@ -11,12 +11,6 @@ albedo_color = Color(1, 0.6039216, 0.18039216, 1)
 radius = 0.35
 height = 1.6
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_oul6g"]
-albedo_color = Color(1, 0.9490196, 0.7529412, 1)
-
-[sub_resource type="BoxMesh" id="BoxMesh_rkbax"]
-size = Vector3(0.2, 0.2, 0.35)
-
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_yw30f"]
 radius = 0.35
 height = 1.6
@@ -30,11 +24,6 @@ script = ExtResource("1_oul6g")
 [node name="Visual" type="MeshInstance3D" parent="." unique_id=2104012349]
 material_override = SubResource("StandardMaterial3D_rkbax")
 mesh = SubResource("CapsuleMesh_g1dw6")
-
-[node name="Nose" type="MeshInstance3D" parent="Visual" unique_id=2076771565]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.45, -0.4)
-material_override = SubResource("StandardMaterial3D_oul6g")
-mesh = SubResource("BoxMesh_rkbax")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1120881048]
 shape = SubResource("CapsuleShape3D_yw30f")
