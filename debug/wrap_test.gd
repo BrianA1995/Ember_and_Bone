@@ -94,6 +94,13 @@ func _walk_through_the_seam() -> void:
 		var cell := RoomDefs.world_to_cell(player.global_position)
 		_check("the player came out on the west edge, same row", cell.x < -SIZE / 2 + 2 and cell.y == row, "cell %s" % cell)
 		_check("standing on the floor, not falling", absf(player.global_position.y - 0.8) < 0.05 and not player.get("_falling"), "height %.2f" % player.global_position.y)
+		var west_room := manager.view.room_at(Vector2i(-SIZE / 2, row))
+		var copy := west_room.get_node_or_null("SeamCopy_1_0") as Node3D if west_room else null
+		_check("the room across the seam is also drawn past this edge, so the doorway shows it",
+				copy != null and absf(copy.global_position.x - (west_room.global_position.x + SIZE * 4.0)) < 0.1,
+				"%s" % copy)
+		_check("and that copy can't be walked on", copy != null and copy.find_children("*", "CollisionObject3D", true, false)
+				.all(func(b: CollisionObject3D) -> bool: return b.collision_layer == 0), "")
 		await _wait(1.0)
 		_check("the maze is still legal", manager.grid.validate().problems.is_empty(), "")
 	game.queue_free()

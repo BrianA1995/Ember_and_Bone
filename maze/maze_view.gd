@@ -10,6 +10,8 @@ extends Node3D
 @export var rise_time := 0.4
 @export var fall_time := 0.3
 @export var rise_depth := 3.5
+## In a wrapping maze, how many cells deep from each edge are also drawn past the opposite edge.
+@export var seam_depth := 2
 ## How long the blocking wall takes to rise across a doorway.
 @export var seal_time := 0.35
 ## Material laid over a cracking room. Left empty, a warm red is used.
@@ -20,6 +22,9 @@ extends Node3D
 @export var wall_color := Color(0.22, 0.24, 0.3)
 ## The colour of a special room's furnishings (altars, plinths, bones), also a test aid.
 @export var prop_color := Color(0.6, 0.55, 0.45)
+
+## Name prefix of a room's look-only copies past the seam.
+const SEAM_COPY := "SeamCopy"
 
 var _grid: MazeGrid
 var _rooms: Dictionary = {}
@@ -82,6 +87,7 @@ func _on_cell_added(cell: Vector2i) -> void:
 	add_child(room)
 	for member in _grid.room_cells(cell):
 		_rooms[member] = room
+	_add_seam_copies(room, data)
 	_apply_ceiling(room)
 	style_room(room)
 	if data.cracked:
@@ -124,17 +130,21 @@ func _on_side_sealed(cell: Vector2i, side: int) -> void:
 	var cell_origin := Vector3(local_cell.x, 0.0, local_cell.y) * RoomDefs.CELL_SIZE
 	var wall_scene := _scene_at(RoomDefs.WALL_SCENE)
 	var spots := RoomDefs.seal_spots(local_side)
-	for i in spots.size():
-		var wall: Node3D = wall_scene.instantiate()
-		wall.name = "Wall_Seal_%d_%d_%d_%d" % [local_cell.x, local_cell.y, local_side, i + 1]
-		wall.position = cell_origin + spots[i].pos
-		wall.rotation_degrees.y = spots[i].rot
-		room.add_child(wall)
-		_paint(wall, _wall_paint())
-		if seal_time > 0.0:
-			wall.position.y = -rise_depth
-			wall.create_tween().tween_property(wall, "position:y", 0.0, seal_time) \
-					.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	# The room's seam copies (see _add_seam_copies) get the same wall.
+	var copies: Array[Node3D] = [room]
+	copies.append_array(_seam_copies(room))
+	for copy in copies:
+		for i in spots.size():
+			var wall: Node3D = wall_scene.instantiate()
+			wall.name = "Wall_Seal_%d_%d_%d_%d" % [local_cell.x, local_cell.y, local_side, i + 1]
+			wall.position = cell_origin + spots[i].pos
+			wall.rotation_degrees.y = spots[i].rot
+			copy.add_child(wall)
+			_paint(wall, _wall_paint())
+			if seal_time > 0.0:
+				wall.position.y = -rise_depth
+				wall.create_tween().tween_property(wall, "position:y", 0.0, seal_time) \
+						.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 
 func _on_cell_cracking(cell: Vector2i) -> void:
@@ -174,7 +184,9 @@ func crack_floor(room: Node3D) -> Array[Node3D]:
 func style_room(room: Node3D) -> void:
 	for child in room.get_children():
 		var node_name := str(child.name)
-		if node_name.begins_with("Wall"):
+		if node_name.begins_with(SEAM_COPY):
+			style_room(child)
+		elif node_name.begins_with("Wall"):
 			_paint(child, _wall_paint())
 		elif node_name.begins_with("Prop"):
 			_paint(child, _prop_paint())
@@ -207,6 +219,56 @@ func _apply_ceiling(room: Node3D) -> void:
 	var ceiling := room.get_node_or_null("Ceiling") as Node3D
 	if ceiling:
 		ceiling.visible = not hide_ceilings
+	for copy in _seam_copies(room):
+		_apply_ceiling(copy)
+
+
+## In a wrapping maze, a room near an edge is also drawn just beyond the opposite edge, so a
+## doorway on that edge looks into the next room instead of into darkness. A copy is look only
+## (no collision, a plain floor); the real room is on the other side and is the one you walk into.
+## Copies are children of the room, so they rise, sink and turn with it.
+func _add_seam_copies(room: Node3D, data: Dictionary) -> void:
+	if not _grid.wrap_edges:
+		return
+	var bounds := _grid.bounds
+	var cells := _grid.room_cells(data.anchor)
+	for dx in [-1, 0, 1]:
+		for dy in [-1, 0, 1]:
+			if (dx == 0 and dy == 0) or not _near_seam(cells, Vector2i(dx, dy)):
+				continue
+			var copy: Node3D = _scene_for(data.piece).instantiate()
+			copy.name = "%s_%d_%d" % [SEAM_COPY, dx, dy]
+			copy.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+			var offset := Vector3(dx * bounds.size.x, 0.0, dy * bounds.size.y) * RoomDefs.CELL_SIZE
+			# The room is turned, so the offset is measured in its own frame.
+			copy.position = offset.rotated(Vector3.UP, -room.rotation.y)
+			room.add_child(copy)
+			for body in copy.find_children("*", "CollisionObject3D", true, false):
+				body.collision_layer = 0
+				body.collision_mask = 0
+
+
+## Whether any of `cells` is within `seam_depth` cells of the edge a copy shifted by `shift`
+## (-1, 0 or 1 on each axis) would sit beyond: a shift of +1 on x is a copy past the east edge,
+## made from a room near the west edge.
+func _near_seam(cells: Array, shift: Vector2i) -> bool:
+	var bounds := _grid.bounds
+	for cell in cells:
+		var from_low: Vector2i = cell - bounds.position
+		var from_high: Vector2i = bounds.end - Vector2i.ONE - cell
+		var x_ok := shift.x == 0 or (from_low.x if shift.x > 0 else from_high.x) < seam_depth
+		var y_ok := shift.y == 0 or (from_low.y if shift.y > 0 else from_high.y) < seam_depth
+		if x_ok and y_ok:
+			return true
+	return false
+
+
+func _seam_copies(room: Node3D) -> Array[Node3D]:
+	var copies: Array[Node3D] = []
+	for child in room.get_children():
+		if str(child.name).begins_with(SEAM_COPY):
+			copies.append(child)
+	return copies
 
 
 func _scene_for(piece: StringName) -> PackedScene:
