@@ -71,6 +71,10 @@ func _ready() -> void:
 	# The rig is positioned every frame from the target's interpolated position.
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	_camera = $Camera3D
+	# The camera is moved into a split-screen view, out from under this node, so it needs the
+	# setting itself. Interpolated, it would glide from the old place to the new one when a player
+	# is carried across the maze's edge: a flash of the maze vanishing around the player.
+	_camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	_camera.current = true
 	var followed := _find_target()
 	if followed:
