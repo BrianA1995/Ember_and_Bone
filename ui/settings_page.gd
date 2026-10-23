@@ -47,6 +47,13 @@ func _ready() -> void:
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.add_child(_list)
 	_rows.add_child(_scroll)
+	if GameSettings.is_embedded():
+		var note := Label.new()
+		note.text = "The game is running inside the editor, so the window can't be resized or go fullscreen. Turn off \"Embed Game on Run\" in the editor's Game tab, or run the game on its own."
+		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		note.custom_minimum_size.x = 560
+		note.add_theme_color_override("font_color", MenuTheme.EMBER)
+		_list.add_child(note)
 	_mode = _add_options("Display mode", MODE_NAMES, func(i: int) -> void: _change(&"window_mode", i))
 	_resolution = _add_options("Resolution", [], func(i: int) -> void: _change(&"resolution", _resolutions[i]))
 	_vsync = _add_check("Vertical sync", func(on: bool) -> void: _change(&"vsync", on))

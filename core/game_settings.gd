@@ -86,6 +86,12 @@ func render_scale() -> float:
 	return clampf(minf(resolution.x / screen.x, resolution.y / screen.y), 0.25, 1.0)
 
 
+## True when the game is running inside the editor's Game tab ("Embed Game on Run"). The editor
+## owns that window, so the game can't resize it or go fullscreen.
+func is_embedded() -> bool:
+	return OS.get_cmdline_args().has("--wid") or OS.get_cmdline_args().has("--embedded")
+
+
 ## Applies everything, tells listeners, and saves.
 func commit() -> void:
 	apply()
