@@ -58,6 +58,20 @@ func add_view(camera: Camera3D, slot: int, color: Color) -> void:
 	apply_settings()
 
 
+## Keeps showing view `index`'s last picture for `frames` frames instead of drawing new ones. Used
+## when a player is carried across the maze's edge: the frames drawn right at the jump showed the
+## world with the candle's light missing, a one-frame black flash. Both sides of the edge look
+## the same, so holding the picture for two frames (a few centimetres of walking) is unnoticeable.
+func hold_view(index: int, frames := 2) -> void:
+	if index >= _viewports.size():
+		return
+	var viewport := _viewports[index]
+	viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	for i in frames:
+		await get_tree().process_frame
+	viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
+
+
 ## The area of view `index`, for drawing something over that player's view only.
 func pane_at(index: int) -> Control:
 	return _panes[index]

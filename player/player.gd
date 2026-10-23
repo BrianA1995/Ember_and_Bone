@@ -11,6 +11,8 @@ extends CharacterBody3D
 
 ## The body has dropped out of sight through a pit.
 signal fell
+## The body was carried somewhere else in one step (see warp_to).
+signal warped
 
 ## Which local player this is (0-3). Picks the input actions (see GameInput) and the body colour.
 @export var slot := 0
@@ -138,6 +140,7 @@ func reset_position() -> void:
 	_unsupported_ticks = 0
 	_grace_left = spawn_grace
 	reset_physics_interpolation()
+	warped.emit()
 
 
 ## The camera rig that follows this body: the one that targets it, else the first there is.

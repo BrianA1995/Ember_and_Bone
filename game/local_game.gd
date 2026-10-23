@@ -77,6 +77,7 @@ func _add_player(slot: int, count: int) -> void:
 	rig.name = "CameraRig%d" % (slot + 1)
 	add_child(rig)
 	_split.add_view(rig.get_camera(), slot, Player.SLOT_COLORS[slot])
+	player.warped.connect(_split.hold_view.bind(slot))
 	players.append(player)
 	rigs.append(rig)
 
