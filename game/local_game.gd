@@ -6,7 +6,8 @@ extends Node3D
 ##
 ## Builds, for each player: a body (player/player.tscn), a camera rig (player/camera_rig.tscn)
 ## and a view of the world in the split screen. Then keeps view settings in step with
-## GameSettings. Children from game/game.tscn: MazeManager, Lighting, Players, SplitScreen.
+## GameSettings. Children from game/game.tscn: MazeManager, Lighting, Pursuit (its sliders are in
+## the inspector), Players, SplitScreen.
 
 const PLAYER_SCENE := preload("res://player/player.tscn")
 const RIG_SCENE := preload("res://player/camera_rig.tscn")
@@ -103,6 +104,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _add_tag() -> void:
 	tag = TagMode.new()
 	tag.eliminate = GameSettings.game_mode == GameSettings.GameMode.TAG
+	tag.pursuit = $Pursuit
 	add_child(tag)
 	tag.setup(players, _split, GameSettings.tag_points)
 	tag.round_over.connect(func(standings: Array) -> void:

@@ -36,6 +36,14 @@ var crack_chance := 0.25
 ## Each room generated since the last junction (T or cross) makes junctions this much more
 ## likely: the odds are multiplied by 1 + streak * junction_boost.
 var junction_boost := 0.5
+## Optional: called as guide.call(cell, mask) -> float for every room that could be built in `cell`;
+## the answer multiplies that room's chance (1.0 = no opinion). How a hunter is led toward its
+## prey (see Pursuit). The grid knows nothing about who is asking.
+var guide := Callable()
+## Optional: cell -> sides that must be open if a room is built there (a bit mask). A walkable
+## route laid through empty space ahead of time; rooms that are already built are not touched, and
+## a side a neighbour has already walled off is left alone.
+var route: Dictionary = {}
 
 ## A room bigger than one cell (RoomDefs `cells`) fills one entry per cell it covers. Every
 ## entry has the same piece and `anchor` (the cell its origin sits on); each has its own `mask`.
@@ -139,7 +147,8 @@ func reveal_beyond(from: Vector2i, side: int) -> bool:
 		return true
 	if not in_bounds(cell) or not is_open(from, side):
 		return false
-	var known: bool = RoomDefs.has_side(_cells[from].known, side)
+	# A doorway on a route is never blocked, any more than one that is the way back.
+	var known: bool = RoomDefs.has_side(_cells[from].known, side) or RoomDefs.has_side(route.get(from, 0), side)
 	if not known and _rng.randf() < block_chance:
 		var keep_exits := 1 if _rng.randf() < dead_end_chance else 2
 		if _try_seal(from, side, keep_exits):
@@ -196,7 +205,7 @@ func reroll_cell(cell: Vector2i) -> bool:
 			pool.append(variant)
 	var replaced := false
 	while not pool.is_empty() and not replaced:
-		var pick := _pick_weighted(pool)
+		var pick := _pick_weighted(pool, cell)
 		pool.erase(pick)
 		_store(pick, old.known)
 		replaced = frontier_from(cell) > 0
@@ -238,7 +247,8 @@ func constraints(cell: Vector2i) -> Dictionary:
 			fixed |= 1 << side
 			if is_open(n, RoomDefs.opposite(side)):
 				open |= 1 << side
-	return {"fixed": fixed, "open": open}
+	var wanted: int = route.get(cell, 0) & ~fixed
+	return {"fixed": fixed | wanted, "open": open | wanted}
 
 
 ## Every room placement that satisfies the neighbours of `cell` and has a way out. A placement
@@ -361,7 +371,7 @@ func _place(cell: Vector2i, pool: Array[Dictionary]) -> bool:
 	while not pool.is_empty() and boxed_in:
 		if not pick.is_empty():
 			_unstore(pick)
-		pick = _pick_weighted(pool)
+		pick = _pick_weighted(pool, cell)
 		pool.erase(pick)
 		_store(pick)
 		boxed_in = frontier_from(cell) == 0
@@ -395,7 +405,7 @@ func _unstore(pick: Dictionary) -> void:
 		_cells.erase(pick.anchor + offset)
 
 
-func _pick_weighted(pool: Array[Dictionary]) -> Dictionary:
+func _pick_weighted(pool: Array[Dictionary], cell: Vector2i) -> Dictionary:
 	# A piece's weight is split across its rotations so rotation count doesn't skew odds.
 	var per_piece := {}
 	for variant in pool:
@@ -407,6 +417,8 @@ func _pick_weighted(pool: Array[Dictionary]) -> Dictionary:
 		var share: float = _weight_of(variant.piece) / per_piece[variant.piece]
 		if RoomDefs.is_junction(variant.mask) and not RoomDefs.is_multi(variant.piece):
 			share *= junction_factor
+		if guide.is_valid() and not RoomDefs.is_multi(variant.piece):
+			share *= guide.call(cell, variant.mask)
 		shares.append(share)
 		total += share
 	var roll := _rng.randf() * total

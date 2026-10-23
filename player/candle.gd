@@ -7,6 +7,9 @@ extends Node3D
 ## Later: shielding or raising the flame (design doc) is a change to `reach_cells` and
 ## `energy` on this node.
 
+## How high the flame's centre sits above the wick, in metres.
+const FLAME_HEIGHT := 0.05
+
 ## How far the light carries, in cells (1 = the next room along each corridor).
 @export var reach_cells := 1.0:
 	set = set_reach_cells
@@ -15,6 +18,12 @@ extends Node3D
 @export var flicker_amount := 0.18
 @export var flicker_speed := 9.0
 @export var shadows := true
+
+## How the flame is leaning now and where it is going: the tilt axis' length is the angle in
+## radians, in the candle's own frame (zero is upright).
+var _lean := Vector3.ZERO
+var _lean_goal := Vector3.ZERO
+var _lean_speed := 6.0
 
 var _light: OmniLight3D
 var _flame: MeshInstance3D
@@ -34,7 +43,36 @@ func _process(delta: float) -> void:
 	var flicker := _noise.get_noise_1d(_time * 10.0)
 	_light.light_energy = energy * (1.0 + flicker * flicker_amount * 2.0)
 	_light.position.x = flicker * 0.012
-	_flame.scale = Vector3(1.0 - flicker * 0.08, 1.0 + flicker * 0.3, 1.0 - flicker * 0.08)
+	_lean = _lean.lerp(_lean_goal, 1.0 - exp(-_lean_speed * delta))
+	_shape_flame(Vector3(1.0 - flicker * 0.08, 1.0 + flicker * 0.3, 1.0 - flicker * 0.08))
+
+
+## Leans the flame toward `world_direction` (flat, in the world; zero stands it upright), by
+## `strength` (0-1) of `max_degrees`, easing there at `speed`.
+func lean_toward(world_direction: Vector3, strength := 1.0, max_degrees := 60.0, speed := 6.0) -> void:
+	_lean_speed = speed
+	var flat := Vector3(world_direction.x, 0.0, world_direction.z)
+	if flat.length() < 0.001:
+		_lean_goal = Vector3.ZERO
+		return
+	# The tilt turns about the axis that carries "up" toward the direction: up x direction.
+	_lean_goal = global_basis.inverse() * Vector3.UP.cross(flat.normalized()) * clampf(strength, 0.0, 1.0) * deg_to_rad(max_degrees)
+
+
+## How far over the flame is, in radians.
+func lean_angle() -> float:
+	return _lean.length()
+
+
+## The flame's shape: `flicker` squashes and stretches it, and the lean tips it from the wick.
+func _shape_flame(flicker: Vector3) -> void:
+	var angle := _lean.length()
+	var tilt := Basis.IDENTITY
+	if angle > 0.001:
+		tilt = Basis(_lean / angle, angle)
+	# A leaning flame is also longer, as if blown.
+	var stretch := Vector3(1.0, 1.0 + angle * 0.3, 1.0)
+	_flame.transform = Transform3D(tilt * Basis.from_scale(flicker * stretch), tilt * Vector3(0.0, FLAME_HEIGHT, 0.0))
 
 
 func set_reach_cells(value: float) -> void:
@@ -91,7 +129,7 @@ func _build_flame() -> void:
 	mesh.radius = 0.035
 	mesh.height = 0.11
 	_flame.mesh = mesh
-	_flame.position.y = 0.05
+	_flame.position.y = FLAME_HEIGHT
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.albedo_color = Color(1.0, 0.85, 0.5)

@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://lighting/maze_lighting.gd" id="4_light"]
 [ext_resource type="Script" path="res://game/split_screen.gd" id="5_split"]
 [ext_resource type="Script" path="res://ui/pause_menu.gd" id="6_pause"]
+[ext_resource type="Script" path="res://game/pursuit.gd" id="7_pursuit"]
 
 [node name="Game" type="Node3D"]
 script = ExtResource("1_game")
@@ -18,6 +19,9 @@ script = ExtResource("3_view")
 
 [node name="Lighting" type="Node" parent="."]
 script = ExtResource("4_light")
+
+[node name="Pursuit" type="Node" parent="."]
+script = ExtResource("7_pursuit")
 
 [node name="Players" type="Node3D" parent="."]
 

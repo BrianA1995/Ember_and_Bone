@@ -36,6 +36,8 @@ var it_slot := -1
 var finished := false
 ## Where the people who are out wait.
 var holding_room: HoldingRoom
+## Leads the player who is it toward the others (see Pursuit). Optional: without it, nobody is helped.
+var pursuit: Pursuit
 
 var _players: Array[Player] = []
 var _huds: Array[TagHud] = []
@@ -158,3 +160,18 @@ func _refresh() -> void:
 	for slot in _huds.size():
 		_huds[slot].show_state(points[slot], slot == it_slot and alive[slot] and not finished,
 				_head_start_left, not alive[slot])
+	_update_pursuit()
+
+
+## Whoever is it hunts everyone else still in. The hunter's clock starts when the head start ends.
+func _update_pursuit() -> void:
+	if pursuit == null:
+		return
+	if finished or it_slot < 0:
+		pursuit.stop()
+		return
+	var prey: Array[Node3D] = []
+	for slot in _players.size():
+		if slot != it_slot and alive[slot]:
+			prey.append(_players[slot])
+	pursuit.set_chase(_players[it_slot], prey, _head_start_left <= 0.0)

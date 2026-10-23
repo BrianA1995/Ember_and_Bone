@@ -69,6 +69,10 @@ func _lines() -> Array[String]:
 	var start := _manager.start_collapse
 	if start and start.phase == StartCollapse.Phase.SPREADING:
 		lines.append("Start chamber floor breaks in %.0f s" % start.seconds_left())
+	var pursuit := get_parent().get_node_or_null("Pursuit") as Pursuit
+	if pursuit and pursuit.hunter:
+		lines.append("Hunter %s lost %.0f s, pressure %.2f%s" % [pursuit.hunter.name, pursuit.lost_time,
+				pursuit.pressure, "  (route laid: %d cells)" % _route_size() if _route_size() > 0 else ""])
 	var floor_line := _floor_line(player)
 	if not floor_line.is_empty():
 		lines.append(floor_line)
@@ -77,6 +81,10 @@ func _lines() -> Array[String]:
 	if not report.problems.is_empty():
 		lines.append("PROBLEM: " + report.problems[0])
 	return lines
+
+
+func _route_size() -> int:
+	return _manager.grid.route.size()
 
 
 ## What the cracked floor under the player is doing, or "" if they aren't on one.

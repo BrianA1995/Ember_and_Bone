@@ -257,6 +257,15 @@ func _land_in_the_void() -> void:
 
 # --- The candle ------------------------------------------------------------------------
 
+## Leans the candle's flame toward a direction in the world (zero: upright). See Candle.lean_toward.
+func lean_flame(world_direction: Vector3, max_degrees := 60.0, speed := 6.0) -> void:
+	_candle.lean_toward(world_direction, 1.0, max_degrees, speed)
+
+
+## How far over the flame is leaning, in radians.
+func flame_lean() -> float:
+	return _candle.lean_angle()
+
 ## Puts the candle, and the collision box around it, where the body is holding it.
 func _hold_candle() -> void:
 	var held := Basis(Vector3.UP, _visual.rotation.y) * candle_hold
