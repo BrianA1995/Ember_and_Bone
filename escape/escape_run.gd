@@ -17,7 +17,8 @@ extends Node
 ##    them takes it with interact (E, or A).
 ##  - A gate is a big chamber. When enough prisoners with keys stand inside it, it starts unlocking;
 ##    if they all stay for `unlock_seconds` they escape and the run is won.
-##  - Lost: too few keys still exist to open a gate, or every gate has been lost to the dark.
+##  - Lost: too few keys still exist to open a gate. A gate or alcove that goes dark unseen, or a gate
+##    that goes dark at all, is built again later; only a key seen and then left behind is gone.
 ##
 ## The maze scripts know nothing about this: it listens to the grid, hands the generator new odds
 ## through MazeGrid.weights, and puts keys in the rooms the view built.
@@ -241,7 +242,8 @@ func _on_cell_removed(cell: Vector2i) -> void:
 		var pickup = _pickups[cell]
 		_pickups.erase(cell)
 		if is_instance_valid(pickup) and not pickup.is_queued_for_deletion():
-			if _seen.has(cell):
+			# Rooms that vanish because a candle was put away aren't the team's loss: the key comes back later.
+			if _seen.has(cell) and not _someone_in_the_dark():
 				keys_lost += 1
 				_check_lost()
 			else:
@@ -253,14 +255,21 @@ func _on_cell_removed(cell: Vector2i) -> void:
 			if _gate_cells[member] == anchor:
 				_gate_cells.erase(member)
 		if _gates.erase(anchor):
-			if not _seen.has(anchor):
-				gates_placed -= 1
-				_update_weights()
-			else:
+			# A gate that goes dark is not the end: the labyrinth builds another one later.
+			gates_placed -= 1
+			if _seen.has(anchor):
 				gates_lost += 1
+			_update_weights()
 			if _unlocking == anchor:
 				unlock_progress = 0.0
 			_check_lost()
+
+
+func _someone_in_the_dark() -> bool:
+	for player in players:
+		if not player.is_candle_lit():
+			return true
+	return false
 
 
 ## Marks the key alcoves and gates a prisoner is close enough to see: the light of a burning candle
@@ -413,8 +422,6 @@ func _check_lost() -> void:
 		return
 	if keys_total - keys_lost < keys_required():
 		_lose("Too few keys are left in the labyrinth.")
-	elif gates_placed >= gates_total and _gates.is_empty():
-		_lose("Every gate has been lost to the dark.")
 
 
 func _lose(reason: String) -> void:

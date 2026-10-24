@@ -212,8 +212,9 @@ func _play() -> void:
 	_check("too few keys left loses the run", lost.size() == 1 and "keys" in lost[0], "%s" % [lost])
 	escape.restart()
 	escape.gates_placed = escape.gates_total
+	escape.gates_lost = escape.gates_total
 	escape._check_lost()
-	_check("every gate lost loses the run", lost.size() == 2 and "gate" in lost[1], "%s" % [lost])
+	_check("losing gates does not lose the run: more are built", lost.size() == 1 and not escape.finished, "%s" % [lost])
 	escape.restart()
 	_check("a new maze starts a fresh run", not escape.finished and escape.keys_collected == 0 and escape.keys_lost == 0, "")
 	get_tree().paused = false
