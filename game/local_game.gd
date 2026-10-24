@@ -18,6 +18,8 @@ const SPAWN_SPREAD := 0.8
 
 ## The tag rules, in a tag game (null in freeplay).
 var tag: TagMode
+## The escape rules, in an escape game (null otherwise).
+var escape: EscapeRun
 var players: Array[Player] = []
 var rigs: Array[CameraRig] = []
 
@@ -44,8 +46,10 @@ func _ready() -> void:
 		_add_player(slot, GameSettings.player_count)
 	_add_debug_overlay()
 	_add_map()
-	if GameSettings.game_mode != GameSettings.GameMode.FREEPLAY:
+	if GameSettings.is_tag_mode():
 		_add_tag()
+	elif GameSettings.game_mode == GameSettings.GameMode.ESCAPE:
+		_add_escape()
 	GameSettings.changed.connect(_apply_settings)
 	_apply_settings()
 
@@ -112,6 +116,32 @@ func _add_tag() -> void:
 		add_child(results)
 		results.show_results(standings))
 	($MazeManager as MazeManager).maze_rebuilt.connect(tag.reset)
+
+
+## Escape: keys and gates (its numbers are on the EscapeRun node), a readout in every pane, and a
+## results screen when the run is won or lost. A new maze starts a new run.
+func _add_escape() -> void:
+	escape = $EscapeRun
+	escape.setup(players, _split)
+	escape.run_won.connect(func(escaped: Array) -> void:
+		var names: Array[String] = []
+		for slot in escaped:
+			names.append("Player %d" % (slot + 1))
+		_show_run_results("You escaped", ", ".join(names) + " got out.", escape))
+	escape.run_lost.connect(func(reason: String) -> void:
+		_show_run_results("The Cage keeps you", reason, escape))
+
+
+func _show_run_results(title: String, reason: String, run: EscapeRun) -> void:
+	var seconds := int(run.elapsed)
+	var facts: Array[String] = [
+		"Keys found: %d of %d (%d lost to the dark)" % [run.keys_collected, run.keys_total, run.keys_lost],
+		"Time: %d:%02d" % [seconds / 60, seconds % 60],
+		"Maze seed: %d" % ($MazeManager as MazeManager).grid.seed_value,
+	]
+	var results := RunResults.new()
+	add_child(results)
+	results.show_results(title, reason, facts)
 
 
 ## The debug map of the maze, shown if the settings ask for it.

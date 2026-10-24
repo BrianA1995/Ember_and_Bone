@@ -22,7 +22,7 @@ signal round_over(standings: Array)
 ## Seconds at the start before tagging and the point loss begin.
 @export var head_start := 5.0
 ## Seconds after a tag during which it can't be passed again.
-@export var cooldown := 1.5
+@export var cooldown := 3
 ## Players who run out of points are out of the round (see above).
 @export var eliminate := true
 

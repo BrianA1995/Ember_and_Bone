@@ -3,7 +3,7 @@ extends Control
 ## The first screen: Play, number of local players, Settings, Quit. Built in code.
 ## Main scene of the project (ui/main_menu.tscn).
 
-const MODE_NAMES := ["Freeplay", "Tag (last one standing)", "Endless tag"]
+const MODE_NAMES := ["Freeplay", "Tag (last one standing)", "Endless tag", "Escape (find the keys)"]
 
 var _main_page: VBoxContainer
 var _settings_page: SettingsPage
@@ -77,7 +77,7 @@ func _stepper(on_step: Callable, label_out: Array) -> HBoxContainer:
 
 
 func _add_players(step: int) -> void:
-	var least := 1 if GameSettings.game_mode == GameSettings.GameMode.FREEPLAY else GameSettings.TAG_MIN_PLAYERS
+	var least := GameSettings.TAG_MIN_PLAYERS if GameSettings.is_tag_mode() else 1
 	GameSettings.player_count = clampi(GameSettings.player_count + step, least, GameInput.SLOTS)
 	_save_and_refresh()
 
@@ -102,7 +102,7 @@ func _refresh_rows() -> void:
 	var count := GameSettings.player_count
 	_players_label.text = "%d player%s" % [count, "" if count == 1 else "s"]
 	_mode_label.text = "Mode: %s" % MODE_NAMES[GameSettings.game_mode]
-	_points_row.visible = GameSettings.game_mode != GameSettings.GameMode.FREEPLAY
+	_points_row.visible = GameSettings.is_tag_mode()
 	_points_label.text = "%d points each" % GameSettings.tag_points
 
 

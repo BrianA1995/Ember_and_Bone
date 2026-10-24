@@ -7,7 +7,9 @@ signal changed
 
 enum WindowMode { WINDOWED, BORDERLESS, EXCLUSIVE }
 enum SplitStyle { SIDE_BY_SIDE, STACKED }
-enum GameMode { FREEPLAY, TAG, ENDLESS_TAG }
+## Escape is the real game: find keys, reach a gate, get out (see EscapeRun). New modes go on the
+## end, so settings saved with the older ones still mean the same thing.
+enum GameMode { FREEPLAY, TAG, ENDLESS_TAG, ESCAPE }
 
 ## Tag needs somebody to chase.
 const TAG_MIN_PLAYERS := 2
@@ -119,8 +121,13 @@ func apply() -> void:
 
 ## Tag can't be played alone: it takes at least two players.
 func enforce_mode_rules() -> void:
-	if game_mode != GameMode.FREEPLAY:
+	if is_tag_mode():
 		player_count = maxi(player_count, TAG_MIN_PLAYERS)
+
+
+## Whether the mode is one of the tag games.
+func is_tag_mode() -> bool:
+	return game_mode == GameMode.TAG or game_mode == GameMode.ENDLESS_TAG
 
 
 ## Gives `slot` the device. If another player already has it, that player takes the device
