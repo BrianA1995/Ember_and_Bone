@@ -19,6 +19,9 @@ const FLAME_HEIGHT := 0.05
 @export var flicker_speed := 9.0
 @export var shadows := true
 
+## False while the candle is put away or snuffed (see set_lit).
+var lit := true
+
 ## How the flame is leaning now and where it is going: the tilt axis' length is the angle in
 ## radians, in the candle's own frame (zero is upright).
 var _lean := Vector3.ZERO
@@ -73,6 +76,14 @@ func _shape_flame(flicker: Vector3) -> void:
 	# A leaning flame is also longer, as if blown.
 	var stretch := Vector3(1.0, 1.0 + angle * 0.3, 1.0)
 	_flame.transform = Transform3D(tilt * Basis.from_scale(flicker * stretch), tilt * Vector3(0.0, FLAME_HEIGHT, 0.0))
+
+
+## Lights the candle, or puts it away / snuffs it: out of sight and no light.
+func set_lit(on: bool) -> void:
+	lit = on
+	visible = on
+	if _light:
+		_light.visible = on
 
 
 func set_reach_cells(value: float) -> void:

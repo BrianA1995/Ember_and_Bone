@@ -63,6 +63,13 @@ signal fell
 ## was only just built can't be mistaken for a pit.
 @export var spawn_grace := 0.3
 
+@export_group("Without the candle")
+## What the player can still make out around them while the candle is put away or snuffed: a dim
+## grey light that reaches this far (metres), so little more than the room they stand in.
+@export var sight_range := 3.4
+@export var sight_energy := 0.9
+@export var sight_color := Color(0.78, 0.82, 0.95)
+
 ## Read by the maze: how many cells around the player exist (reach + margin).
 var light_radius := 2
 ## Read by the maze: rooms further than this from the player (metres) are too dim to see,
@@ -74,6 +81,10 @@ var change_distance := 6.0
 const SLOT_COLORS := [
 	Color(1.0, 0.60, 0.18), Color(0.35, 0.65, 1.0), Color(0.45, 0.85, 0.45), Color(0.85, 0.40, 0.85)]
 
+## What the maze reads while the candle burns, kept so it can be put back after the candle is put away.
+var _lit_radius := 2
+var _lit_change_distance := 6.0
+var _sight: OmniLight3D
 var _start_position: Vector3
 var _stand_height := 0.8
 ## How far the candle is raised in front of the face: 0 held at the side, 1 fully up.
@@ -109,6 +120,9 @@ func _ready() -> void:
 	# half a metre out) must stop short of that or the changes become visible.
 	if _candle.light_range() + 0.5 > light_radius * RoomDefs.CELL_SIZE:
 		push_warning("Player: the candle's light reaches rooms that can still change; raise dark_margin")
+	_lit_radius = light_radius
+	_lit_change_distance = change_distance
+	_build_sight()
 
 
 func _physics_process(delta: float) -> void:
@@ -272,6 +286,45 @@ func lean_flame(world_direction: Vector3, max_degrees := 60.0, speed := 6.0) -> 
 ## How far over the flame is leaning, in radians.
 func flame_lean() -> float:
 	return _candle.lean_angle()
+
+
+## Lights the candle, or puts it away (or snuffs it). Without it nothing but the room the player
+## stands in exists around them (the maze reads light_radius 0), and they see it only by a dim grey light.
+func set_candle_lit(on: bool) -> void:
+	if on == _candle.lit:
+		return
+	_candle.set_lit(on)
+	_sight.visible = not on
+	light_radius = _lit_radius if on else 0
+	change_distance = _lit_change_distance if on else 0.5
+
+
+func is_candle_lit() -> bool:
+	return _candle.lit
+
+
+## Where the flame is, and how far its light reaches, in metres.
+func candle_position() -> Vector3:
+	return _candle.global_position
+
+
+func candle_range() -> float:
+	return _candle.light_range()
+
+
+func _build_sight() -> void:
+	_sight = OmniLight3D.new()
+	_sight.name = "NightSight"
+	_sight.light_color = sight_color
+	_sight.light_energy = sight_energy
+	_sight.omni_range = sight_range
+	_sight.omni_attenuation = 1.2
+	_sight.shadow_enabled = true
+	_sight.shadow_bias = 0.03
+	_sight.position.y = 0.6
+	_sight.visible = false
+	add_child(_sight)
+
 
 ## Puts the candle, and the collision box around it, where the body is holding it.
 func _hold_candle() -> void:

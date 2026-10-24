@@ -7,6 +7,7 @@ extends Control
 var _keys: Label
 var _gate: Label
 var _hint: Label
+var _inventory := InventoryBar.new()
 
 
 func _ready() -> void:
@@ -17,6 +18,12 @@ func _ready() -> void:
 	_hint = _label(24, MenuTheme.EMBER, 1.0, -96.0)
 	_gate.visible = false
 	_hint.visible = false
+	add_child(_inventory)
+
+
+## The items in the bottom right: `keys` held of `capacity`, which one is in hand (0 the candle).
+func show_inventory(keys: int, capacity: int, equipped: int, candle_lit: bool) -> void:
+	_inventory.set_state(keys, capacity, equipped, candle_lit)
 
 
 ## `held` keys on this player, of the `needed` each prisoner needs to get out. Alone (needing more

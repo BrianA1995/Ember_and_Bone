@@ -19,7 +19,7 @@ const DEVICE_NONE := -3
 const DEFAULT_DEVICES := [DEVICE_KEYBOARD, DEVICE_ARROWS, 0, 1]
 ## Actions every slot has, each with the events that trigger it for each kind of device.
 const PER_SLOT := [
-	&"move_forward", &"move_back", &"move_left", &"move_right", &"sprint", &"interact", &"hold_flame",
+	&"move_forward", &"move_back", &"move_left", &"move_right", &"sprint", &"interact", &"hold_flame", &"cycle_item",
 	&"camera_cycle", &"camera_top", &"camera_third", &"camera_first",
 	&"look_left", &"look_right", &"look_up", &"look_down",
 ]
@@ -31,12 +31,12 @@ const STICK_DEADZONE := 0.25
 
 const _WASD := {
 	&"move_forward": KEY_W, &"move_back": KEY_S, &"move_left": KEY_A, &"move_right": KEY_D,
-	&"sprint": KEY_SHIFT, &"interact": KEY_E, &"hold_flame": KEY_F,
+	&"sprint": KEY_SHIFT, &"interact": KEY_E, &"hold_flame": KEY_F, &"cycle_item": KEY_TAB,
 	&"camera_cycle": KEY_V, &"camera_top": KEY_1, &"camera_third": KEY_2, &"camera_first": KEY_3,
 }
 const _ARROWS := {
 	&"move_forward": KEY_UP, &"move_back": KEY_DOWN, &"move_left": KEY_LEFT, &"move_right": KEY_RIGHT,
-	&"sprint": KEY_CTRL, &"interact": KEY_ENTER, &"hold_flame": KEY_SLASH, &"camera_cycle": KEY_BACKSLASH,
+	&"sprint": KEY_CTRL, &"interact": KEY_ENTER, &"hold_flame": KEY_SLASH, &"cycle_item": KEY_PERIOD, &"camera_cycle": KEY_BACKSLASH,
 }
 
 static var _configured_for := 0
@@ -113,7 +113,7 @@ static func _events(slot: int, base: StringName) -> Array[InputEvent]:
 
 ## What `base` is on a gamepad: left stick moves, right stick looks, right bumper or trigger (or
 ## a click of the left stick) sprints, A interacts, Y cycles the view, left bumper or trigger holds
-## the flame up in front of you.
+## the flame up in front of you (or whatever you hold), the D-pad switches item.
 static func _pad_events(base: StringName, device: int) -> Array[InputEvent]:
 	var events: Array[InputEvent] = []
 	match base:
@@ -133,6 +133,9 @@ static func _pad_events(base: StringName, device: int) -> Array[InputEvent]:
 		&"hold_flame":
 			events.append(_button(JOY_BUTTON_LEFT_SHOULDER, device))
 			events.append(_axis(JOY_AXIS_TRIGGER_LEFT, 1.0, device))
+		&"cycle_item":
+			events.append(_button(JOY_BUTTON_DPAD_RIGHT, device))
+			events.append(_button(JOY_BUTTON_DPAD_LEFT, device))
 		&"camera_cycle": events.append(_button(JOY_BUTTON_Y, device))
 	return events
 

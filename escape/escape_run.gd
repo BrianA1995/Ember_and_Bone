@@ -9,9 +9,12 @@ extends Node
 ##    Once all of them have been built, none comes up again.
 ##  - A key lies in its alcove (KeyPickup). Taking it starts the alcove floor's collapse. A key whose
 ##    alcove goes dark before anyone takes it is lost for good.
-##  - Each prisoner needs one key to get out, and can carry only one. Alone you carry as many as you
-##    find, and need three. A prisoner holds a key out (the button that raises the flame: F, or the
-##    left trigger or bumper) and a teammate beside them takes it with interact (E, or A).
+##  - Each prisoner needs one key to get out, and can carry only one. Alone you carry three and need
+##    all three. Items: the candle (always there) and the keys. Only one is in hand: switching
+##    (Tab, or the D-pad) to a key puts the candle away, and without a candle only the room you stand
+##    in exists around you (see Player.set_candle_lit and DarkSight). A prisoner holds the key in hand
+##    out (the button that raises the flame: F, or the left trigger or bumper) and a teammate beside
+##    them takes it with interact (E, or A).
 ##  - A gate is a big chamber. When enough prisoners with keys stand inside it, it starts unlocking;
 ##    if they all stay for `unlock_seconds` they escape and the run is won.
 ##  - Lost: too few keys still exist to open a gate, or every gate has been lost to the dark.
@@ -65,6 +68,8 @@ var gates_placed := 0
 var gates_lost := 0
 ## Keys each player carries, by slot.
 var keys_held: Array[int] = []
+## What each player has in hand, by slot: 0 the candle, n the n-th key they carry.
+var equipped: Array[int] = []
 var elapsed := 0.0
 var finished := false
 ## How far the gate that is unlocking has got, in seconds (0 when none is).
@@ -75,6 +80,7 @@ var _manager: MazeManager
 var _grid: MazeGrid
 var _huds: Array[EscapeHud] = []
 var _carriers: Array[KeyCarrier] = []
+var _sight: DarkSight
 ## key alcove cell -> its KeyPickup, while the key lies there.
 var _pickups: Dictionary = {}
 ## gate anchor cell -> true, and every cell of a standing gate -> its anchor.
@@ -93,9 +99,10 @@ static func plan_for(count: int) -> Dictionary:
 	return PLANS[-1]
 
 
-## How many keys a prisoner can carry: any number alone, one with company.
+## How many keys a prisoner can carry, and so how many slots they have beside the candle: what a
+## prisoner needs to get out (three alone, one with company).
 func capacity() -> int:
-	return 99 if players.size() == 1 else 1
+	return keys_per_prisoner
 
 
 ## Keys the team needs in all for the gate to open: what each prisoner needs, for each who must be inside.
@@ -116,6 +123,9 @@ func setup(p_players: Array[Player], split: SplitScreen) -> void:
 		var carrier := KeyCarrier.new()
 		players[i].add_child(carrier)
 		_carriers.append(carrier)
+	_sight = DarkSight.new()
+	add_child(_sight)
+	_sight.setup(players, split)
 	restart()
 
 
@@ -132,8 +142,10 @@ func restart() -> void:
 	gates_placed = 0
 	gates_lost = 0
 	keys_held.clear()
+	equipped.clear()
 	for i in players.size():
 		keys_held.append(0)
+		equipped.append(0)
 	elapsed = 0.0
 	finished = false
 	unlock_progress = 0.0
@@ -156,6 +168,7 @@ func _physics_process(delta: float) -> void:
 	if finished or _grid == null:
 		return
 	elapsed += delta
+	_switch_items()
 	_hand_over_keys()
 	_update_gate(delta)
 	_refresh()
@@ -179,8 +192,10 @@ func prompt(slot: int) -> String:
 	var player := players[slot]
 	if keys_held[slot] < capacity() and _offerer_near(player) != null:
 		return "%s: take the key" % _button_name(slot, &"interact")
-	if players.size() > 1 and keys_held[slot] > 0:
+	if players.size() > 1 and equipped[slot] > 0:
 		return "Hold %s to hold out your key" % _button_name(slot, &"hold_flame")
+	if keys_held[slot] > 0:
+		return "%s: %s" % [_button_name(slot, &"cycle_item"), "take out the candle" if equipped[slot] > 0 else "take out a key"]
 	return ""
 
 
@@ -274,6 +289,13 @@ func _on_key_taken(player: Player, cell: Vector2i, room: Node3D) -> void:
 			(tile as CrackedFloor).collapse_now()
 
 
+## Pressing the switch button moves on to the next item: candle, first key, second key ... candle.
+func _switch_items() -> void:
+	for player in players:
+		if Input.is_action_just_pressed(GameInput.action(player.slot, &"cycle_item")):
+			equipped[player.slot] = (equipped[player.slot] + 1) % (keys_held[player.slot] + 1)
+
+
 ## A prisoner with a free hand takes a key from a teammate who is holding one out, when they press interact.
 func _hand_over_keys() -> void:
 	for taker in players:
@@ -286,6 +308,7 @@ func _hand_over_keys() -> void:
 			continue
 		keys_held[giver.slot] -= 1
 		keys_held[taker.slot] += 1
+		equipped[giver.slot] = mini(equipped[giver.slot], keys_held[giver.slot])
 		key_passed.emit(giver.slot, taker.slot)
 
 
@@ -368,12 +391,13 @@ func _lose(reason: String) -> void:
 ## What `base` is called on the device player `slot` plays with.
 func _button_name(slot: int, base: StringName) -> String:
 	var device: int = GameSettings.controllers[slot] if slot < GameSettings.controllers.size() else GameInput.DEVICE_KEYBOARD
-	match device:
-		GameInput.DEVICE_KEYBOARD:
-			return "E" if base == &"interact" else "F"
-		GameInput.DEVICE_ARROWS:
-			return "Enter" if base == &"interact" else "/"
-	return "A" if base == &"interact" else "LT"
+	var names := {
+		GameInput.DEVICE_KEYBOARD: {&"interact": "E", &"hold_flame": "F", &"cycle_item": "Tab"},
+		GameInput.DEVICE_ARROWS: {&"interact": "Enter", &"hold_flame": "/", &"cycle_item": "."},
+	}
+	if names.has(device):
+		return names[device][base]
+	return {&"interact": "A", &"hold_flame": "LT", &"cycle_item": "D-pad"}[base]
 
 
 func _refresh() -> void:
@@ -381,5 +405,9 @@ func _refresh() -> void:
 	for held in keys_held:
 		carrying += 1 if held > 0 else 0
 	for slot in _huds.size():
-		_carriers[slot].set_count(keys_held[slot])
+		# A key that was handed on (or lost) can't stay in hand.
+		equipped[slot] = mini(equipped[slot], keys_held[slot])
+		players[slot].set_candle_lit(equipped[slot] == 0)
+		_carriers[slot].set_state(keys_held[slot], equipped[slot] > 0)
+		_huds[slot].show_inventory(keys_held[slot], capacity(), equipped[slot], equipped[slot] == 0)
 		_huds[slot].show_state(keys_held[slot], keys_per_prisoner, carrying, at_gate_needed, gate_status(slot), prompt(slot))

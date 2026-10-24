@@ -63,6 +63,11 @@ func pane_at(index: int) -> Control:
 	return _panes[index]
 
 
+## The picture of view `index` (what the camera sees), for giving it a screen effect.
+func picture_at(index: int) -> TextureRect:
+	return _panes[index].get_child(0) as TextureRect
+
+
 ## How many views there are.
 func view_count() -> int:
 	return _panes.size()

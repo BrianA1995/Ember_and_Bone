@@ -12,6 +12,7 @@ func _ready() -> void:
 	_check_plans()
 	await _play()
 	await _play_alone()
+	await _play_dark()
 	print("ESCAPE TEST: %s" % ("PASS" if _failures == 0 else "FAIL (%d)" % _failures))
 	get_tree().quit(0 if _failures == 0 else 1)
 
@@ -132,6 +133,14 @@ func _play() -> void:
 	other.warp_to(spot + Vector3(1.0, 0, 0))
 	_press(&"hold_flame")
 	await _wait(0.2)
+	_check("with the candle in hand, holding F holds the candle up, not the key out", not escape._carriers[0].offering and walker.is_candle_lit(), "")
+	_release(&"hold_flame")
+	_press(&"cycle_item")
+	await _wait(0.1)
+	_release(&"cycle_item")
+	_check("the switch button takes out the key and puts the candle away", escape.equipped[0] == 1 and not walker.is_candle_lit(), "%s" % [escape.equipped])
+	_press(&"hold_flame")
+	await _wait(0.2)
 	_check("holding the button holds the key out", escape._carriers[0].offering, "")
 	_check("and the teammate is told they can take it", "take the key" in escape.prompt(1), escape.prompt(1))
 	other.warp_to(spot + Vector3(6.0, 0, 0))
@@ -147,7 +156,10 @@ func _play() -> void:
 	_release(&"p2_interact")
 	_release(&"hold_flame")
 	_check("beside them, interact takes the key", escape.keys_held == ([0, 1] as Array[int]) and passed == [[0, 1]], "%s %s" % [escape.keys_held, passed])
+	_check("the one who gave it has their candle back", escape.equipped[0] == 0 and walker.is_candle_lit(), "%s" % [escape.equipped])
+	_check("the one who took it keeps the candle in hand", escape.equipped[1] == 0 and other.is_candle_lit(), "%s" % [escape.equipped])
 	escape.keys_held[0] = 1
+	escape.equipped[0] = 1
 	await _wait(0.1)
 	_press(&"hold_flame")
 	await _wait(0.2)
@@ -220,7 +232,7 @@ func _play_alone() -> void:
 	await _wait(0.3)
 	var escape := game.escape
 	_check("alone: 4 keys in the maze, 3 needed to get out", escape.keys_total == 4 and escape.keys_per_prisoner == 3 and escape.keys_required() == 3, "")
-	_check("and any number can be carried", escape.capacity() > 3, "")
+	_check("and three can be carried, so four slots in all", escape.capacity() == 3, "")
 	var player: Player = game.players[0]
 	var at := player.global_position
 	for i in 3:
@@ -228,6 +240,16 @@ func _play_alone() -> void:
 		key.taken.connect(escape._on_key_taken.bind(Vector2i(900 + i, 0), null))
 	await _wait(0.3)
 	_check("alone, all the keys that lie there are taken", escape.keys_held[0] == 3, "%s" % [escape.keys_held])
+	for step in 3:
+		_press(&"cycle_item")
+		await _wait(0.1)
+		_release(&"cycle_item")
+		await _wait(0.1)
+		_check("switching goes on through the keys (step %d)" % (step + 1), escape.equipped[0] == (step + 1) % 4, "%s" % [escape.equipped])
+	_press(&"cycle_item")
+	await _wait(0.1)
+	_release(&"cycle_item")
+	_check("and round to the candle again", escape.equipped[0] == 0 and player.is_candle_lit(), "%s" % [escape.equipped])
 	game.queue_free()
 	await get_tree().process_frame
 
@@ -258,3 +280,45 @@ func _check(what: String, passed: bool, detail: String) -> void:
 	if not passed:
 		_failures += 1
 	print("  %s: %s%s" % ["ok  " if passed else "FAIL", what, "" if detail.is_empty() else " (%s)" % detail])
+
+
+## The candle put away: the rooms around vanish, the view goes grey, another's candle brings colour back.
+func _play_dark() -> void:
+	print("-- without the candle")
+	GameSettings.game_mode = GameSettings.GameMode.ESCAPE
+	GameSettings.player_count = 2
+	GameInput.configure(2)
+	var game := (load("res://game/game.tscn") as PackedScene).instantiate() as LocalGame
+	add_child(game)
+	await _wait(0.3)
+	var escape := game.escape
+	var manager := game.get_node("MazeManager") as MazeManager
+	var one: Player = game.players[0]
+	var two: Player = game.players[1]
+	escape.keys_held[0] = 1
+	one.warp_to(Vector3(0, 0.8, 0))
+	two.warp_to(Vector3(0, 0.8, 0))
+	await _wait(0.5)
+	var around := manager.reveal.lit.size()
+	escape.equipped[0] = 1
+	two.warp_to(Vector3(RoomDefs.CELL_SIZE * 8.0, 0.8, 0))
+	await _wait(1.0)
+	_check("with the candle away, the player lights only their own room", one.light_radius == 0 and not one.is_candle_lit(), "radius %d" % one.light_radius)
+	var here := RoomDefs.world_to_cell(one.global_position)
+	var neighbours := 0
+	for side in RoomDefs.SIDE_COUNT:
+		var next := manager.grid.neighbor(here, side)
+		# (The start room is bigger than a cell: its other cells are part of the room they stand in.)
+		if manager.grid.has_cell(next) and not manager.grid.room_cells(here).has(next):
+			neighbours += 1
+	_check("and the rooms around them are gone", manager.grid.has_cell(here) and neighbours == 0, "%d left" % neighbours)
+	var sight := escape._sight
+	_check("their view goes nearly grey", sight.amount[0] > 0.8 and sight.amount[1] < 0.05, "%s" % [sight.amount])
+	two.warp_to(one.global_position + Vector3(1.0, 0, 0))
+	await _wait(1.2)
+	_check("a burning candle beside them brings the colour back", sight.amount[0] < 0.05, "%s" % [sight.amount])
+	escape.equipped[0] = 0
+	await _wait(0.3)
+	_check("lighting the candle again restores its light", one.light_radius > 0 and one.is_candle_lit(), "radius %d" % one.light_radius)
+	game.queue_free()
+	await get_tree().process_frame
