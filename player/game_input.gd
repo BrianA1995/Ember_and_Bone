@@ -112,7 +112,7 @@ static func _events(slot: int, base: StringName) -> Array[InputEvent]:
 
 
 ## What `base` is on a gamepad: left stick moves, right stick looks, right bumper or trigger (or
-## a click of the left stick) sprints, X interacts, Y cycles the view, left bumper or trigger holds
+## a click of the left stick) sprints, A interacts, Y cycles the view, left bumper or trigger holds
 ## the flame up in front of you.
 static func _pad_events(base: StringName, device: int) -> Array[InputEvent]:
 	var events: Array[InputEvent] = []
@@ -129,7 +129,7 @@ static func _pad_events(base: StringName, device: int) -> Array[InputEvent]:
 			events.append(_button(JOY_BUTTON_RIGHT_SHOULDER, device))
 			events.append(_axis(JOY_AXIS_TRIGGER_RIGHT, 1.0, device))
 			events.append(_button(JOY_BUTTON_LEFT_STICK, device))
-		&"interact": events.append(_button(JOY_BUTTON_X, device))
+		&"interact": events.append(_button(JOY_BUTTON_A, device))
 		&"hold_flame":
 			events.append(_button(JOY_BUTTON_LEFT_SHOULDER, device))
 			events.append(_axis(JOY_AXIS_TRIGGER_LEFT, 1.0, device))

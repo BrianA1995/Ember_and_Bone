@@ -1,7 +1,8 @@
 extends Node
 ## Plays the escape run in the real game scene: the key and gate numbers by player count, keys and
-## gates appearing in the maze (never more than the plan), a key being picked up, a gate staying
-## shut without enough prisoners or keys and opening with both, and the two ways to lose.
+## gates appearing in the maze (never more than the plan), picking a key up (one at a time with
+## company, any number alone), holding a key out and a teammate taking it, a gate staying shut until
+## enough prisoners hold their key and opening with them, and the two ways to lose.
 ## Run debug/escape_test.tscn and read the output for "ESCAPE TEST".
 
 var _failures := 0
@@ -10,6 +11,7 @@ var _failures := 0
 func _ready() -> void:
 	_check_plans()
 	await _play()
+	await _play_alone()
 	print("ESCAPE TEST: %s" % ("PASS" if _failures == 0 else "FAIL (%d)" % _failures))
 	get_tree().quit(0 if _failures == 0 else 1)
 
@@ -19,9 +21,9 @@ func _check_plans() -> void:
 	var one := EscapeRun.plan_for(1)
 	var three := EscapeRun.plan_for(3)
 	var four := EscapeRun.plan_for(4)
-	_check("1 player: 4 keys, 3 needed, 2 gates, 1 inside", [one.keys, one.needed, one.gates, one.at_gate] == [4, 3, 2, 1], "%s" % [one])
-	_check("2-3 players: 6 keys, 4 needed, 3 gates, 2 inside", [three.keys, three.needed, three.gates, three.at_gate] == [6, 4, 3, 2], "%s" % [three])
-	_check("4 players: 8 keys, 5 needed, 3 gates, 2 inside", [four.keys, four.needed, four.gates, four.at_gate] == [8, 5, 3, 2], "%s" % [four])
+	_check("1 player: 4 keys in the maze, 3 needed to get out, 2 gates, 1 inside", [one.keys, one.per_prisoner, one.gates, one.at_gate] == [4, 3, 2, 1], "%s" % [one])
+	_check("2-3 players: 6 keys, 1 each, 3 gates, 2 inside", [three.keys, three.per_prisoner, three.gates, three.at_gate] == [6, 1, 3, 2], "%s" % [three])
+	_check("4 players: 8 keys, 1 each, 3 gates, 2 inside", [four.keys, four.per_prisoner, four.gates, four.at_gate] == [8, 1, 3, 2], "%s" % [four])
 	_check("the menu lists every mode", MainMenu.MODE_NAMES.size() == GameSettings.GameMode.size(), "")
 	GameSettings.game_mode = GameSettings.GameMode.ESCAPE
 	GameSettings.player_count = 1
@@ -29,6 +31,17 @@ func _check_plans() -> void:
 	_check("escape can be played alone, tag can't", GameSettings.player_count == 1 and not GameSettings.is_tag_mode(), "")
 	GameSettings.game_mode = GameSettings.GameMode.TAG
 	_check("tag is a tag mode", GameSettings.is_tag_mode(), "")
+	GameInput.configure(1, [0, GameInput.DEVICE_ARROWS, 1, 2])
+	var pad_buttons: Array = []
+	for event in InputMap.action_get_events(&"interact"):
+		if event is InputEventJoypadButton:
+			pad_buttons.append(event.button_index)
+	_check("on a gamepad A interacts", pad_buttons == [JOY_BUTTON_A], "%s" % [pad_buttons])
+	var pad_out: Array = []
+	for event in InputMap.action_get_events(&"hold_flame"):
+		pad_out.append(event is InputEventJoypadButton or event is InputEventJoypadMotion)
+	_check("and the left trigger or bumper holds the flame (and the key) out", pad_out == [true, true], "%s" % [pad_out])
+	GameInput.configure(1)
 
 
 func _play() -> void:
@@ -42,13 +55,13 @@ func _play() -> void:
 	var escape := game.escape
 	var manager: MazeManager = game.get_node("MazeManager")
 	_check("an escape game has the escape rules", escape != null and game.tag == null, "")
-	_check("2 players: 6 keys in the maze, 4 needed", escape.keys_total == 6 and escape.keys_needed == 4 and escape.at_gate_needed == 2, "")
+	_check("2 players: 6 keys in the maze, one each to get out, 2 inside the gate", escape.keys_total == 6 and escape.keys_per_prisoner == 1 and escape.at_gate_needed == 2, "")
+	_check("with company a prisoner carries one key", escape.capacity() == 1, "")
 	var won := []
 	var lost := []
 	escape.run_won.connect(func(escaped: Array) -> void: won.append(escaped))
 	escape.run_lost.connect(func(reason: String) -> void: lost.append(reason))
 	# Keep the run from ending on its own while the walker ignores most keys.
-	escape.keys_needed = 0
 	escape.rooms_per_key = 2
 	escape.rooms_per_gate = 2
 	escape.gate_after_keys = 0
@@ -66,6 +79,7 @@ func _play() -> void:
 	rng.seed = 5
 	while steps < 4000 and (escape._gates.is_empty() or not picked):
 		steps += 1
+		escape.keys_total = 999
 		if not picked:
 			for pickup in escape._pickups.values():
 				if is_instance_valid(pickup):
@@ -86,17 +100,69 @@ func _play() -> void:
 			walker.warp_to(RoomDefs.cell_to_world(cell) + Vector3(0, 0.8, 0))
 		other.warp_to(walker.global_position + Vector3(0.5, 0, 0))
 		await _wait(0.1)
-		_check_never_more(escape)
-	_check("keys were built into alcoves, no more than the plan", escape.keys_placed >= 1 and escape.keys_placed <= escape.keys_total, "%d of %d" % [escape.keys_placed, escape.keys_total])
+	escape.keys_total = 6
+	_check("keys were built into alcoves, no more than the plan", escape.keys_placed >= 1 and escape.keys_placed <= 6, "%d of 6" % escape.keys_placed)
 	_check("a key was picked up by walking into it", picked and escape.keys_collected >= 1, "after %d steps" % steps)
+	_check("a prisoner never carries more than one", escape.keys_held[0] <= 1 and escape.keys_held[1] <= 1, "%s" % [escape.keys_held])
 	_check("a gate was built", not escape._gates.is_empty() and escape.gates_placed <= escape.gates_total, "%d of %d" % [escape.gates_placed, escape.gates_total])
+
+	print("-- one key at a time, and passing it")
+	escape.keys_total = 999
+	# Keys the maze built during the walk would be picked up by the teammate warped about.
+	for lying in game.find_children("*", "KeyPickup", true, false):
+		lying.queue_free()
+	await _wait(0.1)
+	escape.keys_held[0] = 1
+	escape.keys_held[1] = 0
+	var spot := walker.global_position
+	other.warp_to(spot + Vector3(10.0, 0, 0))
+	var spare := _drop_key(game, escape, spot)
+	await _wait(0.2)
+	_check("holding a key, a second one is left lying for someone with a free hand", is_instance_valid(spare) and not spare.is_queued_for_deletion() and escape.keys_held[0] == 1, "valid %s queued %s held %s" % [is_instance_valid(spare), is_instance_valid(spare) and spare.is_queued_for_deletion(), escape.keys_held])
+	if is_instance_valid(spare):
+		spare.queue_free()
+	escape.keys_held[0] = 1
+	escape.keys_held[1] = 0
+	var passed := []
+	escape.key_passed.connect(func(from: int, to: int) -> void: passed.append([from, to]))
+	_press(&"p2_interact")
+	await _wait(0.2)
+	_release(&"p2_interact")
+	_check("pressing interact takes nothing while nobody holds a key out", escape.keys_held == ([1, 0] as Array[int]), "%s" % [escape.keys_held])
+	other.warp_to(spot + Vector3(1.0, 0, 0))
+	_press(&"hold_flame")
+	await _wait(0.2)
+	_check("holding the button holds the key out", escape._carriers[0].offering, "")
+	_check("and the teammate is told they can take it", "take the key" in escape.prompt(1), escape.prompt(1))
+	other.warp_to(spot + Vector3(6.0, 0, 0))
+	await _wait(0.1)
+	_press(&"p2_interact")
+	await _wait(0.2)
+	_release(&"p2_interact")
+	_check("too far away to take it", escape.keys_held == ([1, 0] as Array[int]), "%s" % [escape.keys_held])
+	other.warp_to(spot + Vector3(1.0, 0, 0))
+	await _wait(0.1)
+	_press(&"p2_interact")
+	await _wait(0.2)
+	_release(&"p2_interact")
+	_release(&"hold_flame")
+	_check("beside them, interact takes the key", escape.keys_held == ([0, 1] as Array[int]) and passed == [[0, 1]], "%s %s" % [escape.keys_held, passed])
+	escape.keys_held[0] = 1
+	await _wait(0.1)
+	_press(&"hold_flame")
+	await _wait(0.2)
+	_press(&"p2_interact")
+	await _wait(0.2)
+	_release(&"p2_interact")
+	_release(&"hold_flame")
+	_check("someone who already has a key can't take another", escape.keys_held == ([1, 1] as Array[int]), "%s" % [escape.keys_held])
 
 	print("-- the gate")
 	if escape._gates.is_empty():
 		game.queue_free()
 		await get_tree().process_frame
 		return
-	escape.keys_needed = 4
+	escape.keys_total = 999
 	escape.keys_held[0] = 0
 	escape.keys_held[1] = 0
 	var anchor: Vector2i = escape._gates.keys()[0]
@@ -108,13 +174,16 @@ func _play() -> void:
 	await _wait(1.5)
 	_check("with no keys the gate stays shut", won.is_empty() and escape.unlock_progress == 0.0, "")
 	_check("and says what it is waiting for", escape.gate_status(0).begins_with("Gate:"), escape.gate_status(0))
-	escape.keys_held[0] = 4
-	other.warp_to(middle + Vector3(40, 0, 40))
+	escape.keys_held[0] = 1
 	await _wait(1.5)
-	_check("with keys but one prisoner too few it stays shut", won.is_empty(), "")
+	_check("one key between two prisoners is not enough: each needs their own", won.is_empty(), "")
+	other.warp_to(middle + Vector3(40, 0, 40))
+	escape.keys_held[1] = 1
+	await _wait(1.5)
+	_check("a prisoner with a key but outside the gate does not count", won.is_empty(), "")
 	other.warp_to(beside)
 	await _wait(0.5)
-	_check("with both prisoners and the keys it starts to unlock", escape.unlock_progress > 0.0 and escape.gate_status(0).begins_with("Unlocking"), escape.gate_status(0))
+	_check("both inside with their keys: it starts to unlock", escape.unlock_progress > 0.0 and escape.gate_status(0).begins_with("Unlocking"), escape.gate_status(0))
 	await _wait(1.5)
 	_check("and they escape", won.size() == 1 and escape.finished and won[0] == [0, 1], "%s" % [won])
 	var results_up := false
@@ -126,7 +195,7 @@ func _play() -> void:
 	print("-- losing")
 	lost.clear()
 	escape.restart()
-	escape.keys_lost = escape.keys_total - escape.keys_needed + 1
+	escape.keys_lost = escape.keys_total - escape.keys_required() + 1
 	escape._check_lost()
 	_check("too few keys left loses the run", lost.size() == 1 and "keys" in lost[0], "%s" % [lost])
 	escape.restart()
@@ -135,15 +204,49 @@ func _play() -> void:
 	_check("every gate lost loses the run", lost.size() == 2 and "gate" in lost[1], "%s" % [lost])
 	escape.restart()
 	_check("a new maze starts a fresh run", not escape.finished and escape.keys_collected == 0 and escape.keys_lost == 0, "")
+	get_tree().paused = false
 	game.queue_free()
 	await get_tree().process_frame
 
 
-func _check_never_more(escape: EscapeRun) -> void:
-	if escape.keys_placed > escape.keys_total or escape.gates_placed > escape.gates_total:
-		_check("never more keys or gates than the plan", false, "%d keys, %d gates" % [escape.keys_placed, escape.gates_placed])
-		escape.keys_placed = 0
-		escape.gates_placed = 0
+## A lone prisoner carries any number of keys and needs three to get out.
+func _play_alone() -> void:
+	print("-- alone")
+	GameSettings.game_mode = GameSettings.GameMode.ESCAPE
+	GameSettings.player_count = 1
+	GameInput.configure(1)
+	var game := (load("res://game/game.tscn") as PackedScene).instantiate() as LocalGame
+	add_child(game)
+	await _wait(0.3)
+	var escape := game.escape
+	_check("alone: 4 keys in the maze, 3 needed to get out", escape.keys_total == 4 and escape.keys_per_prisoner == 3 and escape.keys_required() == 3, "")
+	_check("and any number can be carried", escape.capacity() > 3, "")
+	var player: Player = game.players[0]
+	var at := player.global_position
+	for i in 3:
+		var key := _drop_key(game, escape, at)
+		key.taken.connect(escape._on_key_taken.bind(Vector2i(900 + i, 0), null))
+	await _wait(0.3)
+	_check("alone, all the keys that lie there are taken", escape.keys_held[0] == 3, "%s" % [escape.keys_held])
+	game.queue_free()
+	await get_tree().process_frame
+
+
+## A key lying at `at`, taken the way the run's own are.
+func _drop_key(game: Node, escape: EscapeRun, at: Vector3) -> KeyPickup:
+	var key := KeyPickup.new()
+	key.accepts = func(player: Player) -> bool: return escape.keys_held[player.slot] < escape.capacity()
+	game.add_child(key)
+	key.global_position = at
+	return key
+
+
+func _press(action: StringName) -> void:
+	Input.action_press(action)
+
+
+func _release(action: StringName) -> void:
+	Input.action_release(action)
 
 
 func _wait(seconds: float) -> void:

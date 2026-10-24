@@ -9,14 +9,18 @@ extends Node
 ##    Once all of them have been built, none comes up again.
 ##  - A key lies in its alcove (KeyPickup). Taking it starts the alcove floor's collapse. A key whose
 ##    alcove goes dark before anyone takes it is lost for good.
-##  - A gate is a big chamber. When enough prisoners stand inside it and between them carry enough keys,
-##    it starts unlocking; if they all stay for `unlock_seconds` they escape and the run is won.
+##  - Each prisoner needs one key to get out, and can carry only one. Alone you carry as many as you
+##    find, and need three. A prisoner holds a key out (the button that raises the flame: F, or the
+##    left trigger or bumper) and a teammate beside them takes it with interact (E, or A).
+##  - A gate is a big chamber. When enough prisoners with keys stand inside it, it starts unlocking;
+##    if they all stay for `unlock_seconds` they escape and the run is won.
 ##  - Lost: too few keys still exist to open a gate, or every gate has been lost to the dark.
 ##
 ## The maze scripts know nothing about this: it listens to the grid, hands the generator new odds
 ## through MazeGrid.weights, and puts keys in the rooms the view built.
 
 signal key_taken(slot: int)
+signal key_passed(from_slot: int, to_slot: int)
 signal run_won(escaped: Array)
 signal run_lost(reason: String)
 
@@ -37,18 +41,20 @@ signal run_lost(reason: String)
 @export_range(1.0, 60.0, 0.5, "suffix:s") var unlock_seconds := 10.0
 ## Seconds after a key is taken before its alcove's floor gives way.
 @export_range(0.0, 20.0, 0.5, "suffix:s") var key_collapse_delay := 3.0
+## How close, in metres, a teammate has to stand to take a key that is held out.
+@export_range(0.5, 4.0, 0.1, "suffix:m") var hand_over_distance := 1.8
 
-## What a run of this many players holds: keys in the maze, keys needed at a gate, gates in the
-## maze, prisoners who must be inside the gate.
+## What a run of this many players holds: keys in the maze, keys each prisoner needs to get out,
+## gates in the maze, prisoners who must be inside the gate. Only a lone player carries more than one.
 const PLANS := [
-	{"up_to": 1, "keys": 4, "needed": 3, "gates": 2, "at_gate": 1},
-	{"up_to": 3, "keys": 6, "needed": 4, "gates": 3, "at_gate": 2},
-	{"up_to": 5, "keys": 8, "needed": 5, "gates": 3, "at_gate": 2},
-	{"up_to": 8, "keys": 10, "needed": 6, "gates": 4, "at_gate": 3},
+	{"up_to": 1, "keys": 4, "per_prisoner": 3, "gates": 2, "at_gate": 1},
+	{"up_to": 3, "keys": 6, "per_prisoner": 1, "gates": 3, "at_gate": 2},
+	{"up_to": 5, "keys": 8, "per_prisoner": 1, "gates": 3, "at_gate": 2},
+	{"up_to": 8, "keys": 10, "per_prisoner": 1, "gates": 4, "at_gate": 3},
 ]
 
 var keys_total := 0
-var keys_needed := 0
+var keys_per_prisoner := 1
 var gates_total := 0
 var at_gate_needed := 0
 ## Keys built into alcoves so far, keys lost with their alcove, keys taken by the team.
@@ -68,6 +74,7 @@ var players: Array[Player] = []
 var _manager: MazeManager
 var _grid: MazeGrid
 var _huds: Array[EscapeHud] = []
+var _carriers: Array[KeyCarrier] = []
 ## key alcove cell -> its KeyPickup, while the key lies there.
 var _pickups: Dictionary = {}
 ## gate anchor cell -> true, and every cell of a standing gate -> its anchor.
@@ -86,6 +93,16 @@ static func plan_for(count: int) -> Dictionary:
 	return PLANS[-1]
 
 
+## How many keys a prisoner can carry: any number alone, one with company.
+func capacity() -> int:
+	return 99 if players.size() == 1 else 1
+
+
+## Keys the team needs in all for the gate to open: what each prisoner needs, for each who must be inside.
+func keys_required() -> int:
+	return at_gate_needed * keys_per_prisoner
+
+
 ## Starts a run for `p_players`, with a readout in each one's pane of `split`. A new maze (from the
 ## pause menu) starts a new run.
 func setup(p_players: Array[Player], split: SplitScreen) -> void:
@@ -96,6 +113,9 @@ func setup(p_players: Array[Player], split: SplitScreen) -> void:
 		var hud := EscapeHud.new()
 		split.pane_at(i).add_child(hud)
 		_huds.append(hud)
+		var carrier := KeyCarrier.new()
+		players[i].add_child(carrier)
+		_carriers.append(carrier)
 	restart()
 
 
@@ -103,7 +123,7 @@ func setup(p_players: Array[Player], split: SplitScreen) -> void:
 func restart() -> void:
 	var plan := plan_for(players.size())
 	keys_total = plan.keys
-	keys_needed = plan.needed
+	keys_per_prisoner = plan.per_prisoner
 	gates_total = plan.gates
 	at_gate_needed = plan.at_gate
 	keys_placed = 0
@@ -136,6 +156,7 @@ func _physics_process(delta: float) -> void:
 	if finished or _grid == null:
 		return
 	elapsed += delta
+	_hand_over_keys()
 	_update_gate(delta)
 	_refresh()
 
@@ -146,10 +167,21 @@ func gate_status(slot: int) -> String:
 	if anchor == null:
 		return ""
 	var inside := _inside(anchor)
-	var keys := _keys_of(inside)
-	if inside.size() >= at_gate_needed and keys >= keys_needed:
+	if _with_keys(inside).size() >= at_gate_needed:
 		return "Unlocking  %d" % ceili(unlock_seconds - unlock_progress)
-	return "Gate: %d of %d prisoners, %d of %d keys inside" % [inside.size(), at_gate_needed, keys, keys_needed]
+	if keys_per_prisoner > 1:
+		return "Gate: %d of %d keys" % [keys_held[players[slot].slot], keys_per_prisoner]
+	return "Gate: %d of %d prisoners with a key" % [_with_keys(inside).size(), at_gate_needed]
+
+
+## What player `slot` can do right now, as a hint ("" for nothing).
+func prompt(slot: int) -> String:
+	var player := players[slot]
+	if keys_held[slot] < capacity() and _offerer_near(player) != null:
+		return "%s: take the key" % _button_name(slot, &"interact")
+	if players.size() > 1 and keys_held[slot] > 0:
+		return "Hold %s to hold out your key" % _button_name(slot, &"hold_flame")
+	return ""
 
 
 ## Rolls the next room's odds: key alcoves and gate chambers get likelier the longer none has come up.
@@ -214,6 +246,7 @@ func _place_key(cell: Vector2i) -> void:
 	var pickup := KeyPickup.new()
 	var spawn := room.get_node_or_null("KeySpawn") as Node3D
 	pickup.position = spawn.position if spawn else Vector3(0.0, 1.0, 0.0)
+	pickup.accepts = func(player: Player) -> bool: return keys_held[player.slot] < capacity()
 	pickup.taken.connect(_on_key_taken.bind(cell, room))
 	room.add_child(pickup)
 	_pickups[cell] = pickup
@@ -241,12 +274,41 @@ func _on_key_taken(player: Player, cell: Vector2i, room: Node3D) -> void:
 			(tile as CrackedFloor).collapse_now()
 
 
-## The gate is unlocking while enough prisoners stand in it with enough keys between them.
+## A prisoner with a free hand takes a key from a teammate who is holding one out, when they press interact.
+func _hand_over_keys() -> void:
+	for taker in players:
+		if keys_held[taker.slot] >= capacity():
+			continue
+		if not Input.is_action_just_pressed(GameInput.action(taker.slot, &"interact")):
+			continue
+		var giver := _offerer_near(taker)
+		if giver == null:
+			continue
+		keys_held[giver.slot] -= 1
+		keys_held[taker.slot] += 1
+		key_passed.emit(giver.slot, taker.slot)
+
+
+## The nearest teammate within reach of `taker` who is holding a key out, or null.
+func _offerer_near(taker: Player) -> Player:
+	var best: Player = null
+	var best_distance := hand_over_distance
+	for other in players:
+		if other == taker or keys_held[other.slot] <= 0 or not _carriers[other.slot].offering:
+			continue
+		var apart := other.global_position - taker.global_position
+		var distance := Vector2(apart.x, apart.z).length()
+		if distance <= best_distance:
+			best_distance = distance
+			best = other
+	return best
+
+
+## The gate is unlocking while enough prisoners with keys stand in it.
 func _update_gate(delta: float) -> void:
 	var ready_anchor = null
 	for anchor in _gates:
-		var inside := _inside(anchor)
-		if inside.size() >= at_gate_needed and _keys_of(inside) >= keys_needed:
+		if _with_keys(_inside(anchor)).size() >= at_gate_needed:
 			ready_anchor = anchor
 			break
 	if ready_anchor == null:
@@ -258,7 +320,7 @@ func _update_gate(delta: float) -> void:
 	unlock_progress += delta
 	if unlock_progress >= unlock_seconds:
 		var escaped: Array = []
-		for player in _inside(ready_anchor):
+		for player in _with_keys(_inside(ready_anchor)):
 			escaped.append(player.slot)
 		finished = true
 		run_won.emit(escaped)
@@ -273,24 +335,26 @@ func _inside(anchor: Vector2i) -> Array[Player]:
 	return inside
 
 
+## The prisoners of `list` who have the keys they need to get out.
+func _with_keys(list: Array[Player]) -> Array[Player]:
+	var ready: Array[Player] = []
+	for player in list:
+		if keys_held[player.slot] >= keys_per_prisoner:
+			ready.append(player)
+	return ready
+
+
 ## The anchor of the gate `player` stands in, or null.
 func _gate_around(player: Player) -> Variant:
 	var cell := _grid.wrap_cell(RoomDefs.world_to_cell(player.global_position))
 	return _gate_cells.get(cell)
 
 
-func _keys_of(list: Array[Player]) -> int:
-	var total := 0
-	for player in list:
-		total += keys_held[player.slot]
-	return total
-
-
 ## Ends the run if escape has become impossible.
 func _check_lost() -> void:
 	if finished:
 		return
-	if keys_total - keys_lost < keys_needed:
+	if keys_total - keys_lost < keys_required():
 		_lose("Too few keys are left in the labyrinth.")
 	elif gates_placed >= gates_total and _gates.is_empty():
 		_lose("Every gate has been lost to the dark.")
@@ -301,6 +365,21 @@ func _lose(reason: String) -> void:
 	run_lost.emit(reason)
 
 
+## What `base` is called on the device player `slot` plays with.
+func _button_name(slot: int, base: StringName) -> String:
+	var device: int = GameSettings.controllers[slot] if slot < GameSettings.controllers.size() else GameInput.DEVICE_KEYBOARD
+	match device:
+		GameInput.DEVICE_KEYBOARD:
+			return "E" if base == &"interact" else "F"
+		GameInput.DEVICE_ARROWS:
+			return "Enter" if base == &"interact" else "/"
+	return "A" if base == &"interact" else "LT"
+
+
 func _refresh() -> void:
+	var carrying := 0
+	for held in keys_held:
+		carrying += 1 if held > 0 else 0
 	for slot in _huds.size():
-		_huds[slot].show_state(keys_held[slot], keys_collected, keys_needed, gate_status(slot))
+		_carriers[slot].set_count(keys_held[slot])
+		_huds[slot].show_state(keys_held[slot], keys_per_prisoner, carrying, at_gate_needed, gate_status(slot), prompt(slot))

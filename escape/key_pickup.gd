@@ -2,7 +2,9 @@ class_name KeyPickup
 extends Area3D
 ## A key lying where the maze put it (a key alcove's plinth). Its look is a placeholder built in
 ## code, like the candle: a gold ring, a shaft and two teeth, turning and bobbing slowly so it is
-## easy to spot at the edge of the light. Whoever walks into it picks it up (`taken`) and it goes.
+## easy to spot at the edge of the light. Whoever stands in it and may take it (`accepts`) picks it
+## up (`taken`) and it goes. A player who already carries as many as they can leaves it lying: it
+## is theirs to take as soon as their hands are free.
 ##
 ## Replace the model later by changing build_model(); nothing else depends on it.
 
@@ -14,6 +16,9 @@ signal taken(player: Player)
 @export var bob_speed := 2.2
 ## How close a body has to come to pick it up, in metres.
 @export var pickup_radius := 0.8
+
+## Optional: called as accepts.call(player) -> bool; false leaves the key where it lies.
+var accepts := Callable()
 
 var _model: Node3D
 var _time := randf() * TAU
@@ -31,13 +36,25 @@ func _ready() -> void:
 	add_child(shape)
 	_model = build_model()
 	add_child(_model)
-	body_entered.connect(_on_body_entered)
 
 
 func _process(delta: float) -> void:
 	_time += delta
 	_model.rotation.y += spin_speed * delta
 	_model.position.y = sin(_time * bob_speed) * bob_height
+
+
+func _physics_process(_delta: float) -> void:
+	if _picked:
+		return
+	for body in get_overlapping_bodies():
+		# The overlap list is a step behind a body that has just been carried off, so the distance is checked too.
+		if body is Player and body.global_position.distance_to(global_position) <= pickup_radius + 0.6 \
+				and (not accepts.is_valid() or accepts.call(body)):
+			_picked = true
+			taken.emit(body)
+			queue_free()
+			return
 
 
 ## The placeholder key, about 0.3 m long, standing upright with its ring at the top.
@@ -78,11 +95,3 @@ static func build_model(color := Color(1.0, 0.78, 0.3)) -> Node3D:
 		tooth.material_override = material
 		model.add_child(tooth)
 	return model
-
-
-func _on_body_entered(body: Node3D) -> void:
-	if _picked or not body is Player:
-		return
-	_picked = true
-	taken.emit(body)
-	queue_free()
