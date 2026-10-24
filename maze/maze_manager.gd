@@ -58,7 +58,11 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	reveal.update(_light_sources(), delta)
+	var sources := _light_sources()
+	# A light with no radius is a player standing in the dark: rooms around them must not be seen to move.
+	view.instant = sources.any(func(source: Dictionary) -> bool: return source.radius == 0)
+	reveal.update(sources, delta)
+	view.instant = false
 
 
 ## Builds a fresh maze. Seed 0 picks a random one.

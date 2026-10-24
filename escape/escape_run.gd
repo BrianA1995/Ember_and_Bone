@@ -29,16 +29,20 @@ signal run_won(escaped: Array)
 signal run_lost(reason: String)
 
 @export_group("Placement")
-## About how many ordinary rooms get built between one key alcove and the next.
-@export_range(5, 200, 1) var rooms_per_key := 25
+## How the wait for the next key alcove is paced: the odds reach their ceiling after this many rooms,
+## but the alcove usually turns up long before. 500 means a key about every 90 rooms, a minute and a
+## half of walking (see debug/escape_pace_test).
+@export_range(5, 1000, 1) var rooms_per_key := 500
 ## The same for gate chambers.
-@export_range(5, 400, 1) var rooms_per_gate := 60
+@export_range(5, 1000, 1) var rooms_per_gate := 500
 ## Gates only start to appear once the team has taken this many keys.
 @export_range(0, 10, 1) var gate_after_keys := 2
 ## The weight a key alcove or gate chamber has right after one was built, and at the end of its
 ## stretch; between the two the weight climbs, steeply at the end. (An ordinary room is about 3.)
 @export_range(0.0, 1.0, 0.01) var rarity_floor := 0.05
 @export_range(1.0, 200.0, 1.0) var rarity_ceiling := 40.0
+## How sharply the weight climbs: 1 evenly, higher keeps it low for longer and then rises steeply.
+@export_range(1.0, 6.0, 0.5) var rarity_curve := 3.0
 
 @export_group("Rules")
 ## Seconds everyone has to stay in the gate while it unlocks.
@@ -218,7 +222,7 @@ func _update_weights() -> void:
 
 
 func _rarity(since: int, per: int) -> float:
-	return lerpf(rarity_floor, rarity_ceiling, pow(clampf(float(since) / per, 0.0, 1.0), 2.0))
+	return lerpf(rarity_floor, rarity_ceiling, pow(clampf(float(since) / per, 0.0, 1.0), rarity_curve))
 
 
 func _on_cell_added(cell: Vector2i) -> void:

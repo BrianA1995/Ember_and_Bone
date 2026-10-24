@@ -73,6 +73,11 @@ func room_at(cell: Vector2i) -> Node3D:
 	return _rooms.get(cell)
 
 
+## While true, rooms appear and disappear at once instead of rising and sinking. The manager sets
+## it for a moment while a player stands in the dark, so they never see a room move.
+var instant := false
+
+
 func _on_cell_added(cell: Vector2i) -> void:
 	# A room bigger than a cell is announced once per cell but built once.
 	if _rooms.has(cell):
@@ -92,7 +97,7 @@ func _on_cell_added(cell: Vector2i) -> void:
 	style_room(room)
 	if data.cracked:
 		crack_floor(room)
-	if rise_time > 0.0:
+	if rise_time > 0.0 and not instant:
 		room.position.y = -rise_depth
 		room.create_tween().tween_property(room, "position:y", 0.0, rise_time) \
 				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -110,6 +115,9 @@ func _on_cell_removed(cell: Vector2i) -> void:
 	for body in room.find_children("*", "CollisionObject3D", true, false):
 		body.collision_layer = 0
 		body.collision_mask = 0
+	if instant:
+		room.queue_free()
+		return
 	var tween := room.create_tween()
 	tween.tween_property(room, "position:y", -rise_depth, fall_time) \
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
