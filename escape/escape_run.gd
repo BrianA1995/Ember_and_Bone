@@ -86,6 +86,9 @@ var _pickups: Dictionary = {}
 ## gate anchor cell -> true, and every cell of a standing gate -> its anchor.
 var _gates: Dictionary = {}
 var _gate_cells: Dictionary = {}
+## Alcoves and gates (by cell) that a prisoner has been close enough to see. One that goes dark
+## before that was never seen: it is built again later instead of counting as lost.
+var _seen: Dictionary = {}
 var _unlocking := Vector2i.ZERO
 var _since_key := 0
 var _since_gate := 0
@@ -152,6 +155,7 @@ func restart() -> void:
 	_pickups.clear()
 	_gates.clear()
 	_gate_cells.clear()
+	_seen.clear()
 	_since_key = 0
 	_since_gate = 0
 	_grid = _manager.grid
@@ -168,6 +172,7 @@ func _physics_process(delta: float) -> void:
 	if finished or _grid == null:
 		return
 	elapsed += delta
+	_note_seen()
 	_switch_items()
 	_hand_over_keys()
 	_update_gate(delta)
@@ -236,18 +241,47 @@ func _on_cell_removed(cell: Vector2i) -> void:
 		var pickup = _pickups[cell]
 		_pickups.erase(cell)
 		if is_instance_valid(pickup) and not pickup.is_queued_for_deletion():
-			keys_lost += 1
-			_check_lost()
+			if _seen.has(cell):
+				keys_lost += 1
+				_check_lost()
+			else:
+				keys_placed -= 1
+				_update_weights()
 	if _gate_cells.has(cell):
 		var anchor: Vector2i = _gate_cells[cell]
 		for member in _gate_cells.keys():
 			if _gate_cells[member] == anchor:
 				_gate_cells.erase(member)
 		if _gates.erase(anchor):
-			gates_lost += 1
+			if not _seen.has(anchor):
+				gates_placed -= 1
+				_update_weights()
+			else:
+				gates_lost += 1
 			if _unlocking == anchor:
 				unlock_progress = 0.0
 			_check_lost()
+
+
+## Marks the key alcoves and gates a prisoner is close enough to see: the light of a burning candle
+## reaches that far; without one, only the room they stand in.
+func _note_seen() -> void:
+	for player in players:
+		var reach := player.candle_range() + 1.0 if player.is_candle_lit() else RoomDefs.CELL_SIZE * 0.6
+		for cell in _pickups:
+			if not _seen.has(cell) and _near(player, cell, reach):
+				_seen[cell] = true
+		for anchor in _gates:
+			if not _seen.has(anchor):
+				for member in _grid.room_cells(anchor):
+					if _near(player, member, reach):
+						_seen[anchor] = true
+						break
+
+
+func _near(player: Player, cell: Vector2i, reach: float) -> bool:
+	var apart := RoomDefs.cell_to_world(cell) - player.global_position
+	return Vector2(apart.x, apart.z).length() <= reach
 
 
 func _place_key(cell: Vector2i) -> void:

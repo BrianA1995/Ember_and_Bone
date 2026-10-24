@@ -66,8 +66,8 @@ signal fell
 @export_group("Without the candle")
 ## What the player can still make out around them while the candle is put away or snuffed: a dim
 ## grey light that reaches this far (metres), so little more than the room they stand in.
-@export var sight_range := 3.4
-@export var sight_energy := 0.9
+@export var sight_range := 3.0
+@export var sight_energy := 0.3
 @export var sight_color := Color(0.78, 0.82, 0.95)
 
 ## Read by the maze: how many cells around the player exist (reach + margin).

@@ -1,13 +1,11 @@
 class_name KeyCarrier
 extends Node3D
-## The keys a prisoner carries, drawn on them: hanging at the chest on a cord, except the one they
-## have taken out, which is in their hand, and while the hold-out button is down (F, or the left
-## trigger / bumper: the same button that raises the flame) held out in front for a teammate to
-## take. A child of the Player; EscapeRun tells it how many and whether one is in hand.
+## The key a prisoner has taken out, drawn in their hand (the others stay in the pack, unseen), and
+## while the hold-out button is down (F, or the left trigger / bumper: the same button that raises
+## the flame) held out in front for a teammate to take. A child of the Player; EscapeRun tells it how
+## many keys there are and whether one is in hand.
 
-## Where the keys hang, where the key in hand is, and where it is held out, relative to the body
-## facing north.
-@export var carried_at := Vector3(0.0, 0.3, -0.22)
+## Where the key in hand is, and where it is held out, relative to the body facing north.
 @export var in_hand_at := Vector3(0.38, 0.2, -0.35)
 @export var offered_at := Vector3(-0.32, 0.38, -0.55)
 ## How fast a key moves between the hand and out in front, in whole moves a second.
@@ -49,13 +47,9 @@ func _process(_delta: float) -> void:
 	if _player == null:
 		return
 	var yaw := (_player.get_node("Visual") as Node3D).rotation.y
-	var facing := Basis(Vector3.UP, yaw)
-	global_transform = Transform3D(facing, _player.get_global_transform_interpolated().origin)
-	# The key in hand is the first model; the rest hang side by side at the chest.
-	var hanging := _models.size() - (1 if _in_hand else 0)
+	global_transform = Transform3D(Basis(Vector3.UP, yaw), _player.get_global_transform_interpolated().origin)
+	# Only the item in hand is shown: the first model. The others are in the pack, out of sight.
 	for i in _models.size():
-		if _in_hand and i == 0:
-			_models[i].position = in_hand_at.lerp(offered_at, _out)
-		else:
-			var j := i - (1 if _in_hand else 0)
-			_models[i].position = carried_at + Vector3(j * 0.09 - (hanging - 1) * 0.045, 0.0, 0.0)
+		_models[i].visible = _in_hand and i == 0
+	if _in_hand:
+		_models[0].position = in_hand_at.lerp(offered_at, _out)
