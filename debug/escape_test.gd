@@ -65,8 +65,8 @@ func _play() -> void:
 	# Keep the run from ending on its own while the walker ignores most keys.
 	escape.rooms_per_key = 2
 	escape.rooms_per_gate = 2
-	escape.gate_after_keys = 0
 	escape.restart()
+	escape._deal_gates()
 	escape.key_collapse_delay = 0.5
 	escape.unlock_seconds = 1.0
 
@@ -212,9 +212,9 @@ func _play() -> void:
 	_check("too few keys left loses the run", lost.size() == 1 and "keys" in lost[0], "%s" % [lost])
 	escape.restart()
 	escape.gates_placed = escape.gates_total
-	escape.gates_lost = escape.gates_total
+	escape._gates.clear()
 	escape._check_lost()
-	_check("losing gates does not lose the run: more are built", lost.size() == 1 and not escape.finished, "%s" % [lost])
+	_check("every gate lost loses the run", lost.size() == 2 and "gate" in lost[1], "%s" % [lost])
 	escape.restart()
 	_check("a new maze starts a fresh run", not escape.finished and escape.keys_collected == 0 and escape.keys_lost == 0, "")
 	get_tree().paused = false

@@ -1,12 +1,14 @@
 class_name MazeView
 extends Node3D
 ## Draws a MazeGrid: one room scene per cell. It only listens, it never changes the grid.
-## New rooms rise out of the floor, a blocked doorway gets a wall that rises across it,
-## cracking rooms tint, removed rooms sink away.
+## Rooms appear and vanish at once (with `animate` on they rise out of the floor and sink away, and a
+## blocked doorway gets a wall that rises across it); cracking rooms tint.
 
 ## Hides ceilings so a top-down camera can see in. Collision is unaffected.
 @export var hide_ceilings := true:
 	set = set_hide_ceilings
+## Off: rooms and walls just appear and vanish. On: they rise and sink over the times below.
+@export var animate := false
 @export var rise_time := 0.4
 @export var fall_time := 0.3
 @export var rise_depth := 3.5
@@ -97,7 +99,7 @@ func _on_cell_added(cell: Vector2i) -> void:
 	style_room(room)
 	if data.cracked:
 		crack_floor(room)
-	if rise_time > 0.0 and not instant:
+	if animate and rise_time > 0.0 and not instant:
 		room.position.y = -rise_depth
 		room.create_tween().tween_property(room, "position:y", 0.0, rise_time) \
 				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -115,7 +117,7 @@ func _on_cell_removed(cell: Vector2i) -> void:
 	for body in room.find_children("*", "CollisionObject3D", true, false):
 		body.collision_layer = 0
 		body.collision_mask = 0
-	if instant:
+	if instant or not animate:
 		room.queue_free()
 		return
 	var tween := room.create_tween()
@@ -151,7 +153,7 @@ func _on_side_sealed(cell: Vector2i, side: int) -> void:
 			if copy != room:
 				_look_only(wall)
 			_paint(wall, _wall_paint())
-			if seal_time > 0.0:
+			if animate and seal_time > 0.0:
 				wall.position.y = -rise_depth
 				wall.create_tween().tween_property(wall, "position:y", 0.0, seal_time) \
 						.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)

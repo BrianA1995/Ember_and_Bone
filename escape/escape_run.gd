@@ -18,8 +18,9 @@ extends Node
 ##    them takes it with interact (E, or A).
 ##  - A gate is a big chamber. When enough prisoners with keys stand inside it, it starts unlocking;
 ##    if they all stay for `unlock_seconds` they escape and the run is won.
-##  - Lost: too few keys still exist to open a gate. A gate or alcove that goes dark unseen, or a gate
-##    that goes dark at all, is built again later; only a key seen and then left behind is gone.
+##  - Lost: too few keys still exist to open a gate, or every gate has been seen and left behind. A key
+##    or gate counts as seen once the candle's light reaches its room; one that goes dark before that,
+##    or while someone has their candle away, is dealt again a little later instead.
 ##
 ## The maze scripts know nothing about this: it listens to the grid, hands the generator new odds
 ## through MazeGrid.weights, and puts keys in the rooms the view built.
@@ -37,8 +38,6 @@ signal run_lost(reason: String)
 ## How much of its stretch of the deck a key or gate may land in, around the middle: 0 puts it exactly
 ## in the middle of its stretch (even and predictable), 1 anywhere in it (random, may bunch).
 @export_range(0.0, 1.0, 0.05) var spread := 0.6
-## Gates only start to appear once the team has taken this many keys.
-@export_range(0, 10, 1) var gate_after_keys := 2
 
 @export_group("Rules")
 ## Seconds everyone has to stay in the gate while it unlocks.
@@ -95,8 +94,6 @@ var _unlocking := Vector2i.ZERO
 ## &"gate"), and how many rooms have been built so far. A due card waits until its room is built.
 var _deck: Array[Dictionary] = []
 var _builds := 0
-## Where the gates' stretch of the deck starts.
-var _gates_from := 0
 ## The weight that makes the next room a key alcove or gate chamber once one is due (an ordinary room is about 3).
 const DUE_WEIGHT := 1000.0
 var _rng := RandomNumberGenerator.new()
@@ -214,20 +211,18 @@ func prompt(slot: int) -> String:
 
 
 ## Lays out the deck: one stretch of `rooms_per_key` builds for each key, with the key somewhere in the
-## middle `spread` of it; then, from the build the `gate_after_keys`-th key is due, a stretch of
-## `rooms_per_gate` for each gate.
+## middle `spread` of it. The gates are dealt later, once the team has the keys to open one (_deal_gates).
 func _build_deck() -> void:
 	_deck.clear()
-	var last_key_at := 0
 	for i in keys_total:
-		last_key_at = _slot_in(i * rooms_per_key, rooms_per_key)
-		_deck.append({"at": last_key_at, "kind": &"key"})
-		if i == gate_after_keys - 1:
-			_gates_from = last_key_at
-	if gate_after_keys <= 0:
-		_gates_from = 0
-	for i in gates_total:
-		_deck.append({"at": _slot_in(_gates_from + i * rooms_per_gate, rooms_per_gate), "kind": &"gate"})
+		_deck.append({"at": _slot_in(i * rooms_per_key, rooms_per_key), "kind": &"key"})
+
+
+## Deals the gates, once the team has taken enough keys for one to be opened: one stretch of
+## `rooms_per_gate` builds each, counted from now, so they come one at a time and spread out.
+func _deal_gates() -> void:
+	for i in gates_total - gates_placed:
+		_deck.append({"at": _builds + _slot_in(i * rooms_per_gate, rooms_per_gate), "kind": &"gate"})
 
 
 
@@ -261,7 +256,7 @@ func _redeal(kind: StringName) -> void:
 ## The next room is a key alcove or gate chamber if one is due, else the generator's usual odds.
 func _update_weights() -> void:
 	_grid.weights[&"key_alcove"] = DUE_WEIGHT if keys_placed < keys_total and _due(&"key") else 0.0
-	_grid.weights[&"gate_chamber"] = DUE_WEIGHT if gates_placed < gates_total and keys_collected >= gate_after_keys and _due(&"gate") else 0.0
+	_grid.weights[&"gate_chamber"] = DUE_WEIGHT if gates_placed < gates_total and _due(&"gate") else 0.0
 
 
 func _on_cell_added(cell: Vector2i) -> void:
@@ -298,11 +293,13 @@ func _on_cell_removed(cell: Vector2i) -> void:
 			if _gate_cells[member] == anchor:
 				_gate_cells.erase(member)
 		if _gates.erase(anchor):
-			# A gate that goes dark is not the end: the labyrinth builds another one later.
-			gates_placed -= 1
-			_redeal(&"gate")
-			if _seen.has(anchor):
+			if _seen.has(anchor) and not _someone_in_the_dark():
+				# Seen, and left behind: that gate is gone for good.
 				gates_lost += 1
+			else:
+				# Never seen (or gone with a candle put away): another is dealt a little later.
+				gates_placed -= 1
+				_redeal(&"gate")
 			_update_weights()
 			if _unlocking == anchor:
 				unlock_progress = 0.0
@@ -363,6 +360,8 @@ func _on_key_taken(player: Player, cell: Vector2i, room: Node3D) -> void:
 	_pickups.erase(cell)
 	keys_held[player.slot] += 1
 	keys_collected += 1
+	if keys_collected == keys_required():
+		_deal_gates()
 	key_taken.emit(player.slot)
 	_update_weights()
 	if key_collapse_delay > 0.0:
@@ -462,6 +461,8 @@ func _check_lost() -> void:
 		return
 	if keys_total - keys_lost < keys_required():
 		_lose("Too few keys are left in the labyrinth.")
+	elif gates_placed >= gates_total and _gates.is_empty():
+		_lose("Every gate has been lost to the dark.")
 
 
 func _lose(reason: String) -> void:
