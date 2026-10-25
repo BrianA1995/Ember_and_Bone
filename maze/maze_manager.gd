@@ -17,6 +17,10 @@ signal maze_rebuilt
 ## Chance that a doorway the light reaches is blocked by a wall instead of leading on.
 ## A block only goes in if the room keeps at least two other exits (it prunes a branch).
 @export_range(0.0, 1.0, 0.05) var block_chance := 0.2
+## Off: any room can be built anywhere as long as it opens toward the doorway that led to it, and a
+## doorway left facing a wall (the new room's or a neighbour's) is walled up. On: a new room must
+## also agree with every room already beside it.
+@export var match_neighbours := false
 ## Chance that a block may leave a room with one exit: a true dead end. Keep this low.
 @export_range(0.0, 1.0, 0.05) var dead_end_chance := 0.2
 ## Chance that a straight corridor room has a cracked floor that gives way underfoot.
@@ -70,6 +74,7 @@ func build(new_seed: int = 0) -> void:
 	if new_seed == 0:
 		new_seed = randi_range(1, 2147483647)
 	grid = MazeGrid.new(new_seed, grid_size, weights)
+	grid.match_neighbours = match_neighbours
 	grid.block_chance = block_chance
 	grid.dead_end_chance = dead_end_chance
 	grid.crack_chance = crack_chance

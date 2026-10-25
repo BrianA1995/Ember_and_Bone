@@ -26,6 +26,7 @@ func _ready() -> void:
 	if args.size() >= 2:
 		escape.rooms_per_key = int(args[0])
 		escape.rooms_per_gate = int(args[1])
+		escape.restart()
 	var manager: MazeManager = game.get_node("MazeManager")
 	var player: Player = game.players[0]
 	_manager = manager

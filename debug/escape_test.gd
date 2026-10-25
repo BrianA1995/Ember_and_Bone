@@ -66,7 +66,7 @@ func _play() -> void:
 	escape.rooms_per_key = 2
 	escape.rooms_per_gate = 2
 	escape.gate_after_keys = 0
-	escape.rarity_ceiling = 200.0
+	escape.restart()
 	escape.key_collapse_delay = 0.5
 	escape.unlock_seconds = 1.0
 

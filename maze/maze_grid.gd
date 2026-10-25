@@ -3,7 +3,9 @@ extends RefCounted
 ## Pure maze data: which room sits in which cell. No nodes, no rendering.
 ##
 ## Legality rules, enforced when a cell is generated:
-##  - two touching cells agree: either both open toward each other or both closed
+##  - two touching cells agree: either both open toward each other or both closed. With
+##    `match_neighbours` off a new room only has to connect to where the light is going (and keep
+##    the ways back open); a doorway that then faces a wall, on either side, is walled up
 ##  - nothing opens through the outer wall (the edge of `bounds`), unless `wrap_edges` is on: then
 ##    the edge is a seam, and the room across it is the one on the opposite side of the maze
 ##  - a new cell always opens toward the cell that revealed it, so every path connects
@@ -23,6 +25,11 @@ var bounds: Rect2i
 ## moves whoever crosses). Rooms bigger than a cell never straddle the seam.
 var wrap_edges := false
 var seed_value: int
+## True: a new room must agree with every room already beside it (only rooms that fit are
+## chosen). False: any room may go anywhere as long as it opens toward the doorway that led to
+## it; sides that do not line up get a wall across them (side_sealed), the new room's own or the
+## neighbour's. Rooms swapped as they go dark (reroll_cell) always match.
+var match_neighbours := true
 ## Optional piece -> weight overrides; anything missing uses RoomDefs.PIECES.
 var weights: Dictionary = {}
 ## Chance that a revealed doorway is blocked with a wall instead of leading to a new room.
@@ -61,6 +68,11 @@ var route: Dictionary = {}
 var _cells: Dictionary = {}
 var _rng := RandomNumberGenerator.new()
 var _rooms_since_junction := 0
+
+## `entry` for candidates(): no particular doorway led here, so every neighbour's open doorway counts;
+## or no doorway counts at all.
+const ENTRY_ANY := -1
+const ENTRY_NONE := -2
 
 
 func _init(p_seed: int = 1, p_size: Vector2i = Vector2i(21, 21), p_weights: Dictionary = {}) -> void:
@@ -157,7 +169,7 @@ func reveal_beyond(from: Vector2i, side: int) -> bool:
 		var keep_exits := 1 if _rng.randf() < dead_end_chance else 2
 		if _try_seal(from, side, keep_exits):
 			return false
-	var pool := candidates(cell, false)
+	var pool := candidates(cell, false, true, RoomDefs.opposite(side))
 	if pool.is_empty():
 		# Only a dead end would fit here, so block the doorway instead if that is safe.
 		if not known and _try_seal(from, side, 1):
@@ -173,7 +185,7 @@ func generate_landing(cell: Vector2i) -> bool:
 	if _cells.has(cell) or not in_bounds(cell):
 		return false
 	var pool: Array[Dictionary] = []
-	for variant in candidates(cell, false, false):
+	for variant in candidates(cell, false, false, ENTRY_NONE):
 		if not RoomDefs.is_special(variant.piece):
 			pool.append(variant)
 	var saved := crack_chance
@@ -204,7 +216,7 @@ func reroll_cell(cell: Vector2i) -> bool:
 	if RoomDefs.is_multi(old.piece):
 		return false
 	var pool: Array[Dictionary] = []
-	for variant in candidates(cell, false, false):
+	for variant in candidates(cell, false, false, ENTRY_ANY, true):
 		if variant.piece != old.piece or variant.rotation != old.rotation:
 			pool.append(variant)
 	var replaced := false
@@ -240,27 +252,56 @@ func remove_cell(cell: Vector2i) -> void:
 
 ## Which sides neighbours already decide. `fixed` bits are decided; `open` (a subset of
 ## `fixed`) are the ones that must be open. Outer-wall sides are fixed closed.
-func constraints(cell: Vector2i) -> Dictionary:
+## Loose (see match_neighbours): only the doorway that led here (`entry`, a side of `cell`), the
+## ways back, a neighbour's only exit and the outer wall are decided; anything else may be
+## walled up afterwards.
+func constraints(cell: Vector2i, loose := false, entry := ENTRY_ANY) -> Dictionary:
 	var fixed := 0
 	var open := 0
 	for side in RoomDefs.SIDE_COUNT:
 		var n := neighbor(cell, side)
+		var bit := 1 << side
 		if not in_bounds(n):
-			fixed |= 1 << side
+			fixed |= bit
 		elif _cells.has(n):
-			fixed |= 1 << side
-			if is_open(n, RoomDefs.opposite(side)):
-				open |= 1 << side
+			var facing := is_open(n, RoomDefs.opposite(side))
+			if not loose:
+				fixed |= bit
+				if facing:
+					open |= bit
+			elif facing and (side == entry or entry == ENTRY_ANY or _must_stay_open(n, RoomDefs.opposite(side))):
+				fixed |= bit
+				open |= bit
+	if loose:
+		# A route only runs through empty space; a built neighbour decides for itself.
+		var wanted := 0
+		for side in RoomDefs.SIDE_COUNT:
+			if not _cells.has(neighbor(cell, side)):
+				wanted |= route.get(cell, 0) & (1 << side)
+		wanted &= ~fixed
+		return {"fixed": fixed | wanted, "open": open | wanted}
 	var wanted: int = route.get(cell, 0) & ~fixed
 	return {"fixed": fixed | wanted, "open": open | wanted}
+
+
+## A doorway that may not be walled up: the way back, or the only way out of its room.
+func _must_stay_open(cell: Vector2i, side: int) -> bool:
+	if RoomDefs.has_side(_cells[cell].known, side):
+		return true
+	var exits := 0
+	for s in RoomDefs.SIDE_COUNT:
+		if is_open(cell, s):
+			exits += 1
+	return exits <= 1
 
 
 ## Every room placement that satisfies the neighbours of `cell` and has a way out. A placement
 ## is {piece, rotation, mask, cells, anchor}: `mask` is what `cell` gets, `anchor` where the
 ## room's origin lands. Rooms bigger than a cell are included unless `allow_multi` is off;
 ## they need every cell they cover to be empty and to agree with its neighbours.
-func candidates(cell: Vector2i, allow_dead_ends := true, allow_multi := true) -> Array[Dictionary]:
-	var rules := constraints(cell)
+func candidates(cell: Vector2i, allow_dead_ends := true, allow_multi := true, entry := ENTRY_ANY, strict := false) -> Array[Dictionary]:
+	var loose := not match_neighbours and not strict
+	var rules := constraints(cell, loose, entry)
 	var result: Array[Dictionary] = []
 	for variant in RoomDefs.variants():
 		if RoomDefs.is_start_only(variant.piece):
@@ -271,7 +312,7 @@ func candidates(cell: Vector2i, allow_dead_ends := true, allow_multi := true) ->
 				continue
 			for offset in shape:
 				var anchor: Vector2i = cell - offset
-				if _fits(anchor, shape):
+				if _fits(anchor, shape, cell, entry, loose):
 					result.append({"piece": variant.piece, "rotation": variant.rotation,
 							"mask": shape[offset], "cells": shape, "anchor": anchor})
 			continue
@@ -288,12 +329,12 @@ func candidates(cell: Vector2i, allow_dead_ends := true, allow_multi := true) ->
 
 ## Could a room with this footprint sit with its origin on `anchor`? Every cell it covers must
 ## be empty, inside the bounds, and agree with the rooms around it.
-func _fits(anchor: Vector2i, shape: Dictionary) -> bool:
+func _fits(anchor: Vector2i, shape: Dictionary, first: Vector2i, entry: int, loose: bool) -> bool:
 	for offset in shape:
 		var cell: Vector2i = anchor + offset
 		if not in_bounds(cell) or _cells.has(cell):
 			return false
-		var rules := constraints(cell)
+		var rules := constraints(cell, loose, entry if cell == first else ENTRY_NONE)
 		if (shape[offset] & rules.fixed) != rules.open:
 			return false
 	return true
@@ -372,17 +413,55 @@ func _place(cell: Vector2i, pool: Array[Dictionary]) -> bool:
 	# last one tried if every option would seal the maze.
 	var boxed_in := true
 	var pick := {}
+	var walls: Array = []
 	while not pool.is_empty() and boxed_in:
 		if not pick.is_empty():
+			_unwall(walls)
 			_unstore(pick)
 		pick = _pick_weighted(pool, cell)
 		pool.erase(pick)
 		_store(pick)
+		walls = _wall_mismatches(pick)
 		boxed_in = frontier_from(cell) == 0
 	var placed_mask: int = _cells[cell].mask
 	_rooms_since_junction = 0 if RoomDefs.is_junction(placed_mask) else _rooms_since_junction + 1
 	_announce(cell)
+	for wall in walls:
+		side_sealed.emit(wall[0], wall[1])
 	return true
+
+
+## Walls up every doorway of the room just stored that does not line up with the room beside it:
+## its own where the neighbour is closed, the neighbour's where the new room is closed. Returns the
+## [cell, side] pairs walled, to be announced (or taken back with _unwall).
+func _wall_mismatches(pick: Dictionary) -> Array:
+	var walls: Array = []
+	if match_neighbours:
+		return walls
+	var members: Array = []
+	for offset in pick.cells:
+		members.append(pick.anchor + offset)
+	for cell in members:
+		for side in RoomDefs.SIDE_COUNT:
+			var n := neighbor(cell, side)
+			if members.has(n) or not _cells.has(n) or not in_bounds(n):
+				continue
+			var back := RoomDefs.opposite(side)
+			var mine := is_open(cell, side)
+			var theirs := is_open(n, back)
+			if mine and not theirs:
+				_cells[cell].sealed |= 1 << side
+				walls.append([cell, side])
+			elif theirs and not mine:
+				_cells[n].sealed |= 1 << back
+				walls.append([n, back])
+	return walls
+
+
+func _unwall(walls: Array) -> void:
+	for wall in walls:
+		if _cells.has(wall[0]):
+			_cells[wall[0]].sealed &= ~(1 << wall[1])
 
 
 ## Tells listeners about every cell of the room now in `cell`.

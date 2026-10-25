@@ -3,10 +3,11 @@ extends Node
 ## The escape run, on top of a LocalGame: find keys, carry them to a gate, get out together.
 ## The design doc's "Keys, gates and escape" section, without monsters or wax yet.
 ##
-##  - A fixed number of keys and gates exist per run (by player count, see plan_for). Rooms are
-##    rolled live as light reaches them, so they are not placed in advance: the odds of a key alcove
-##    (or gate chamber) climb with every ordinary room built since the last one, until one comes up.
-##    Once all of them have been built, none comes up again.
+##  - A fixed number of keys and gates exist per run (by player count, see plan_for). Their places
+##    are decided up front, as cards in a shuffled deck of room builds: every room the light builds
+##    is the next card, and a key or gate card makes the room built next a key alcove (or gate
+##    chamber). The keys are spread evenly through the deck but each lands at a random spot inside its
+##    own stretch (`spread`), so they are never bunched and never at a fixed distance.
 ##  - A key lies in its alcove (KeyPickup). Taking it starts the alcove floor's collapse. A key whose
 ##    alcove goes dark before anyone takes it is lost for good.
 ##  - Each prisoner needs one key to get out, and can carry only one. Alone you carry three and need
@@ -29,20 +30,15 @@ signal run_won(escaped: Array)
 signal run_lost(reason: String)
 
 @export_group("Placement")
-## How the wait for the next key alcove is paced: the odds reach their ceiling after this many rooms,
-## but the alcove usually turns up long before. 500 means a key about every 90 rooms, a minute and a
-## half of walking (see debug/escape_pace_test).
-@export_range(5, 1000, 1) var rooms_per_key := 500
-## The same for gate chambers.
-@export_range(5, 1000, 1) var rooms_per_gate := 500
+## About how many rooms get built between one key alcove and the next, and between one gate chamber
+## and the next. (The run's deck is the keys times this long; see debug/escape_pace_test.)
+@export_range(10, 500, 1) var rooms_per_key := 90
+@export_range(10, 500, 1) var rooms_per_gate := 90
+## How much of its stretch of the deck a key or gate may land in, around the middle: 0 puts it exactly
+## in the middle of its stretch (even and predictable), 1 anywhere in it (random, may bunch).
+@export_range(0.0, 1.0, 0.05) var spread := 0.6
 ## Gates only start to appear once the team has taken this many keys.
 @export_range(0, 10, 1) var gate_after_keys := 2
-## The weight a key alcove or gate chamber has right after one was built, and at the end of its
-## stretch; between the two the weight climbs, steeply at the end. (An ordinary room is about 3.)
-@export_range(0.0, 1.0, 0.01) var rarity_floor := 0.05
-@export_range(1.0, 200.0, 1.0) var rarity_ceiling := 40.0
-## How sharply the weight climbs: 1 evenly, higher keeps it low for longer and then rises steeply.
-@export_range(1.0, 6.0, 0.5) var rarity_curve := 3.0
 
 @export_group("Rules")
 ## Seconds everyone has to stay in the gate while it unlocks.
@@ -95,8 +91,15 @@ var _gate_cells: Dictionary = {}
 ## before that was never seen: it is built again later instead of counting as lost.
 var _seen: Dictionary = {}
 var _unlocking := Vector2i.ZERO
-var _since_key := 0
-var _since_gate := 0
+## The deck: the build numbers at which a key or gate is due, as {at, kind} (kind is &"key" or
+## &"gate"), and how many rooms have been built so far. A due card waits until its room is built.
+var _deck: Array[Dictionary] = []
+var _builds := 0
+## Where the gates' stretch of the deck starts.
+var _gates_from := 0
+## The weight that makes the next room a key alcove or gate chamber once one is due (an ordinary room is about 3).
+const DUE_WEIGHT := 1000.0
+var _rng := RandomNumberGenerator.new()
 
 
 ## The numbers for a run of `count` players.
@@ -161,8 +164,9 @@ func restart() -> void:
 	_gates.clear()
 	_gate_cells.clear()
 	_seen.clear()
-	_since_key = 0
-	_since_gate = 0
+	_builds = 0
+	_rng.seed = _manager.grid.seed_value
+	_build_deck()
 	_grid = _manager.grid
 	# The manager's weights belong to the manager; this run changes its own copy.
 	_grid.weights = _grid.weights.duplicate()
@@ -209,20 +213,55 @@ func prompt(slot: int) -> String:
 	return ""
 
 
-## Rolls the next room's odds: key alcoves and gate chambers get likelier the longer none has come up.
+## Lays out the deck: one stretch of `rooms_per_key` builds for each key, with the key somewhere in the
+## middle `spread` of it; then, from the build the `gate_after_keys`-th key is due, a stretch of
+## `rooms_per_gate` for each gate.
+func _build_deck() -> void:
+	_deck.clear()
+	var last_key_at := 0
+	for i in keys_total:
+		last_key_at = _slot_in(i * rooms_per_key, rooms_per_key)
+		_deck.append({"at": last_key_at, "kind": &"key"})
+		if i == gate_after_keys - 1:
+			_gates_from = last_key_at
+	if gate_after_keys <= 0:
+		_gates_from = 0
+	for i in gates_total:
+		_deck.append({"at": _slot_in(_gates_from + i * rooms_per_gate, rooms_per_gate), "kind": &"gate"})
+
+
+
+## A random build number in the middle `spread` of the stretch that starts at `start`.
+func _slot_in(start: int, length: int) -> int:
+	var low := 0.5 - spread / 2.0
+	return start + roundi(length * (low + _rng.randf() * spread))
+
+
+## Is a card of this kind due: its room is the next one that may be built?
+func _due(kind: StringName) -> bool:
+	for card in _deck:
+		if card.kind == kind and card.at <= _builds:
+			return true
+	return false
+
+
+## Takes the due card of this kind out of the deck, once its room is built.
+func _play_card(kind: StringName) -> void:
+	for card in _deck:
+		if card.kind == kind and card.at <= _builds:
+			_deck.erase(card)
+			return
+
+
+## Puts a card back a little way ahead, for a key or gate that went dark before anyone saw it.
+func _redeal(kind: StringName) -> void:
+	_deck.append({"at": _builds + _rng.randi_range(8, 25), "kind": kind})
+
+
+## The next room is a key alcove or gate chamber if one is due, else the generator's usual odds.
 func _update_weights() -> void:
-	var key_weight := 0.0
-	if keys_placed < keys_total:
-		key_weight = _rarity(_since_key, rooms_per_key)
-	var gate_weight := 0.0
-	if gates_placed < gates_total and keys_collected >= gate_after_keys:
-		gate_weight = _rarity(_since_gate, rooms_per_gate)
-	_grid.weights[&"key_alcove"] = key_weight
-	_grid.weights[&"gate_chamber"] = gate_weight
-
-
-func _rarity(since: int, per: int) -> float:
-	return lerpf(rarity_floor, rarity_ceiling, pow(clampf(float(since) / per, 0.0, 1.0), rarity_curve))
+	_grid.weights[&"key_alcove"] = DUE_WEIGHT if keys_placed < keys_total and _due(&"key") else 0.0
+	_grid.weights[&"gate_chamber"] = DUE_WEIGHT if gates_placed < gates_total and keys_collected >= gate_after_keys and _due(&"gate") else 0.0
 
 
 func _on_cell_added(cell: Vector2i) -> void:
@@ -236,8 +275,7 @@ func _on_cell_added(cell: Vector2i) -> void:
 		&"gate_chamber":
 			_place_gate(cell)
 		_:
-			_since_key += 1
-			_since_gate += 1
+			_builds += 1
 	_update_weights()
 
 
@@ -252,6 +290,7 @@ func _on_cell_removed(cell: Vector2i) -> void:
 				_check_lost()
 			else:
 				keys_placed -= 1
+				_redeal(&"key")
 				_update_weights()
 	if _gate_cells.has(cell):
 		var anchor: Vector2i = _gate_cells[cell]
@@ -261,6 +300,7 @@ func _on_cell_removed(cell: Vector2i) -> void:
 		if _gates.erase(anchor):
 			# A gate that goes dark is not the end: the labyrinth builds another one later.
 			gates_placed -= 1
+			_redeal(&"gate")
 			if _seen.has(anchor):
 				gates_lost += 1
 			_update_weights()
@@ -298,7 +338,7 @@ func _near(player: Player, cell: Vector2i, reach: float) -> bool:
 
 
 func _place_key(cell: Vector2i) -> void:
-	_since_key = 0
+	_play_card(&"key")
 	if keys_placed >= keys_total:
 		return
 	keys_placed += 1
@@ -315,7 +355,7 @@ func _place_key(cell: Vector2i) -> void:
 
 
 func _place_gate(anchor: Vector2i) -> void:
-	_since_gate = 0
+	_play_card(&"gate")
 	gates_placed += 1
 	_gates[anchor] = true
 	for member in _grid.room_cells(anchor):

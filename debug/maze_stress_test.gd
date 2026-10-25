@@ -80,6 +80,8 @@ func _pct(part: int, whole: int) -> int:
 
 func _make_grid(map_seed: int, stats: Dictionary) -> MazeGrid:
 	var grid := MazeGrid.new(map_seed)
+	# The game's rule by default; pass "-- strict" to test rooms that must match every neighbour.
+	grid.match_neighbours = OS.get_cmdline_user_args().has("strict")
 	grid.block_chance = block_chance
 	grid.dead_end_chance = dead_end_chance
 	grid.junction_boost = junction_boost
