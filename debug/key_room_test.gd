@@ -14,7 +14,6 @@ func _ready() -> void:
 	await get_tree().physics_frame
 	var escape := game.escape
 	escape.rooms_per_key = 12
-	escape.rooms_per_gate = 12
 	escape.restart()
 	escape.keys_total = 999
 	var manager: MazeManager = game.get_node("MazeManager")

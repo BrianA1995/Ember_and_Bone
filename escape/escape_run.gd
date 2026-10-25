@@ -31,13 +31,14 @@ signal run_won(escaped: Array)
 signal run_lost(reason: String)
 
 @export_group("Placement")
-## About how many rooms get built between one key alcove and the next, and between one gate chamber
-## and the next. (The run's deck is the keys times this long; see debug/escape_pace_test.)
+## About how many rooms get built between one key alcove and the next. (The run's deck is the keys
+## times this long, and the gates are spread through it the same way; see debug/escape_pace_test.)
 @export_range(10, 500, 1) var rooms_per_key := 90
-@export_range(10, 500, 1) var rooms_per_gate := 90
 ## How much of its stretch of the deck a key or gate may land in, around the middle: 0 puts it exactly
 ## in the middle of its stretch (even and predictable), 1 anywhere in it (random, may bunch).
 @export_range(0.0, 1.0, 0.05) var spread := 0.6
+## With the menu option on, how long the last gate left stays up after its light goes, in seconds.
+@export_range(0.0, 120.0, 1.0, "suffix:s") var last_gate_grace := 20.0
 
 @export_group("Rules")
 ## Seconds everyone has to stay in the gate while it unlocks.
@@ -170,6 +171,7 @@ func restart() -> void:
 	if not _grid.cell_added.is_connected(_on_cell_added):
 		_grid.cell_added.connect(_on_cell_added)
 		_grid.cell_removed.connect(_on_cell_removed)
+	_manager.reveal.extra_unlit = _extra_unlit
 	_update_weights()
 	_refresh()
 
@@ -211,18 +213,15 @@ func prompt(slot: int) -> String:
 
 
 ## Lays out the deck: one stretch of `rooms_per_key` builds for each key, with the key somewhere in the
-## middle `spread` of it. The gates are dealt later, once the team has the keys to open one (_deal_gates).
+## middle `spread` of it. The gates are dealt the same way across the whole deck, so they come
+## scattered among the keys. The last gate waits until enough keys have turned up to open it.
 func _build_deck() -> void:
 	_deck.clear()
 	for i in keys_total:
 		_deck.append({"at": _slot_in(i * rooms_per_key, rooms_per_key), "kind": &"key"})
-
-
-## Deals the gates, once the team has taken enough keys for one to be opened: one stretch of
-## `rooms_per_gate` builds each, counted from now, so they come one at a time and spread out.
-func _deal_gates() -> void:
-	for i in gates_total - gates_placed:
-		_deck.append({"at": _builds + _slot_in(i * rooms_per_gate, rooms_per_gate), "kind": &"gate"})
+	var stretch := keys_total * rooms_per_key / gates_total
+	for i in gates_total:
+		_deck.append({"at": _slot_in(i * stretch, stretch), "kind": &"gate"})
 
 
 
@@ -253,10 +252,24 @@ func _redeal(kind: StringName) -> void:
 	_deck.append({"at": _builds + _rng.randi_range(8, 25), "kind": kind})
 
 
+## A gate is due, and (for the last one) enough keys have turned up, taken or not, to open it.
+func _gate_may_come() -> bool:
+	if gates_placed >= gates_total or not _due(&"gate"):
+		return false
+	return gates_placed < gates_total - 1 or keys_placed >= keys_required()
+
+
+## Extra seconds a room survives in the dark: the last gate left, if the menu option is on.
+func _extra_unlit(cell: Vector2i) -> float:
+	if GameSettings.gate_grace and _gate_cells.has(cell) and gates_total - gates_lost == 1:
+		return last_gate_grace
+	return 0.0
+
+
 ## The next room is a key alcove or gate chamber if one is due, else the generator's usual odds.
 func _update_weights() -> void:
 	_grid.weights[&"key_alcove"] = DUE_WEIGHT if keys_placed < keys_total and _due(&"key") else 0.0
-	_grid.weights[&"gate_chamber"] = DUE_WEIGHT if gates_placed < gates_total and _due(&"gate") else 0.0
+	_grid.weights[&"gate_chamber"] = DUE_WEIGHT if _gate_may_come() else 0.0
 
 
 func _on_cell_added(cell: Vector2i) -> void:
@@ -360,8 +373,6 @@ func _on_key_taken(player: Player, cell: Vector2i, room: Node3D) -> void:
 	_pickups.erase(cell)
 	keys_held[player.slot] += 1
 	keys_collected += 1
-	if keys_collected == keys_required():
-		_deal_gates()
 	key_taken.emit(player.slot)
 	_update_weights()
 	if key_collapse_delay > 0.0:

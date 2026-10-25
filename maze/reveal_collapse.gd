@@ -22,6 +22,8 @@ var collapse_enabled := true
 ## doesn't flicker away when the player stands on a cell boundary.
 var unlit_delay := 0.15
 var crack_duration := 0.2
+## Optional: called as extra_unlit.call(cell) -> float, extra seconds a room survives in the dark (0 for none).
+var extra_unlit := Callable()
 ## Replace rooms as they leave the candle's light (see above).
 var change_when_dark := true
 ## The cells that exist around the player on the most recent update.
@@ -54,13 +56,14 @@ func update(sources: Array, delta: float) -> void:
 			continue
 		var unlit_for: float = _unlit_time.get(cell, 0.0) + delta
 		_unlit_time[cell] = unlit_for
-		if unlit_for >= unlit_delay + crack_duration:
+		var delay: float = unlit_delay + (extra_unlit.call(cell) if extra_unlit.is_valid() else 0.0)
+		if unlit_for >= delay + crack_duration:
 			for member in grid.room_cells(cell):
 				_unlit_time.erase(member)
 				_cracking.erase(member)
 				_was_visible.erase(member)
 			grid.remove_cell(cell)
-		elif unlit_for >= unlit_delay and not _cracking.has(cell):
+		elif unlit_for >= delay and not _cracking.has(cell):
 			_cracking[cell] = true
 			cell_cracking.emit(cell)
 

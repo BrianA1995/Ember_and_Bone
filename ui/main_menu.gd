@@ -12,6 +12,7 @@ var _players_label: Label
 var _mode_label: Label
 var _points_label: Label
 var _points_row: HBoxContainer
+var _grace_check: CheckButton
 
 
 func _ready() -> void:
@@ -48,6 +49,12 @@ func _build_main_page() -> VBoxContainer:
 	page.add_child(_stepper(_add_players, label_out))
 	_points_row = _stepper(_add_points, label_out)
 	page.add_child(_points_row)
+	_grace_check = CheckButton.new()
+	_grace_check.text = "Last gate lingers (20 s)"
+	_grace_check.toggled.connect(func(on: bool) -> void:
+		GameSettings.gate_grace = on
+		GameSettings.save_settings())
+	page.add_child(_grace_check)
 	_mode_label = label_out[0]
 	_players_label = label_out[1]
 	_points_label = label_out[2]
@@ -103,6 +110,8 @@ func _refresh_rows() -> void:
 	_players_label.text = "%d player%s" % [count, "" if count == 1 else "s"]
 	_mode_label.text = "Mode: %s" % MODE_NAMES[GameSettings.game_mode]
 	_points_row.visible = GameSettings.is_tag_mode()
+	_grace_check.visible = GameSettings.game_mode == GameSettings.GameMode.ESCAPE
+	_grace_check.set_pressed_no_signal(GameSettings.gate_grace)
 	_points_label.text = "%d points each" % GameSettings.tag_points
 
 

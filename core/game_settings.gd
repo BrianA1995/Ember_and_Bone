@@ -50,6 +50,8 @@ var start_view := CameraRig.Mode.TOP
 var game_mode := GameMode.FREEPLAY
 ## Points each player starts a tag round with; being it costs one a second.
 var tag_points := 100
+## Escape: the last gate left stays up for a while after its light goes (see EscapeRun.last_gate_grace).
+var gate_grace := false
 ## The debug map of the whole maze (M toggles it).
 var show_map := false
 ## What each player (slot 0-3) plays with: GameInput.DEVICE_KEYBOARD, DEVICE_ARROWS, DEVICE_NONE,
@@ -186,4 +188,4 @@ func load_settings() -> void:
 func _keys() -> Array[String]:
 	return ["window_mode", "resolution", "vsync", "master_volume", "mouse_sensitivity",
 			"field_of_view", "split_style", "show_debug", "player_count", "maze_size", "show_map",
-			"controllers", "game_mode", "tag_points", "start_view"]
+			"controllers", "game_mode", "tag_points", "start_view", "gate_grace"]

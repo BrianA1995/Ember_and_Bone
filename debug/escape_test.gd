@@ -13,6 +13,7 @@ func _ready() -> void:
 	await _play()
 	await _play_alone()
 	await _play_dark()
+	await _play_last_gate()
 	print("ESCAPE TEST: %s" % ("PASS" if _failures == 0 else "FAIL (%d)" % _failures))
 	get_tree().quit(0 if _failures == 0 else 1)
 
@@ -64,9 +65,7 @@ func _play() -> void:
 	escape.run_lost.connect(func(reason: String) -> void: lost.append(reason))
 	# Keep the run from ending on its own while the walker ignores most keys.
 	escape.rooms_per_key = 2
-	escape.rooms_per_gate = 2
 	escape.restart()
-	escape._deal_gates()
 	escape.key_collapse_delay = 0.5
 	escape.unlock_seconds = 1.0
 
@@ -321,5 +320,38 @@ func _play_dark() -> void:
 	escape.equipped[0] = 0
 	await _wait(0.3)
 	_check("lighting the candle again restores its light", one.light_radius > 0 and one.is_candle_lit(), "radius %d" % one.light_radius)
+	game.queue_free()
+	await get_tree().process_frame
+
+
+## The last gate waits until enough keys have turned up; with the menu option on it lingers in the dark.
+func _play_last_gate() -> void:
+	print("-- the last gate")
+	GameSettings.game_mode = GameSettings.GameMode.ESCAPE
+	GameSettings.player_count = 2
+	GameInput.configure(2)
+	var game := (load("res://game/game.tscn") as PackedScene).instantiate() as LocalGame
+	add_child(game)
+	await _wait(0.3)
+	var escape := game.escape
+	escape._deck.clear()
+	escape._deck.append({"at": 0, "kind": &"gate"})
+	escape.gates_placed = 0
+	_check("an early gate may come before any key has", escape._gate_may_come(), "")
+	escape.gates_placed = escape.gates_total - 1
+	escape.keys_placed = escape.keys_required() - 1
+	_check("the last gate waits while too few keys have turned up", not escape._gate_may_come(), "")
+	escape.keys_placed = escape.keys_required()
+	_check("and comes once enough have, taken or not", escape._gate_may_come() and escape.keys_collected == 0, "")
+	var cell := Vector2i(5, 5)
+	escape._gate_cells[cell] = cell
+	escape.gates_lost = escape.gates_total - 1
+	GameSettings.gate_grace = false
+	_check("with the option off the last gate does not linger", escape._extra_unlit(cell) == 0.0, "")
+	GameSettings.gate_grace = true
+	_check("with it on, it does", escape._extra_unlit(cell) == escape.last_gate_grace, "")
+	escape.gates_lost = 0
+	_check("a gate that is not the last one does not", escape._extra_unlit(cell) == 0.0, "")
+	GameSettings.gate_grace = false
 	game.queue_free()
 	await get_tree().process_frame
