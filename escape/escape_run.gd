@@ -316,25 +316,21 @@ func _someone_in_the_dark() -> bool:
 	return false
 
 
-## Marks the key alcoves and gates a prisoner is close enough to see: the light of a burning candle
-## reaches that far; without one, only the room they stand in.
+## Marks the key alcoves and gates a prisoner can actually see: the rooms their candle lights (the room
+## they stand in and those joined to it by open doorways, as far as the light reaches), or without a
+## candle only the room they stand in. A room just out of the light, or behind a wall, is not seen.
 func _note_seen() -> void:
 	for player in players:
-		var reach := player.candle_range() + 1.0 if player.is_candle_lit() else RoomDefs.CELL_SIZE * 0.6
+		var here := _grid.wrap_cell(RoomDefs.world_to_cell(player.global_position))
+		var radius := ceili(player.candle_reach) if player.is_candle_lit() else 0
+		var lit := LightField.compute(_grid, [{"cell": here, "radius": radius}], false)
 		for cell in _pickups:
-			if not _seen.has(cell) and _near(player, cell, reach):
+			if lit.has(cell):
 				_seen[cell] = true
 		for anchor in _gates:
-			if not _seen.has(anchor):
-				for member in _grid.room_cells(anchor):
-					if _near(player, member, reach):
-						_seen[anchor] = true
-						break
-
-
-func _near(player: Player, cell: Vector2i, reach: float) -> bool:
-	var apart := RoomDefs.cell_to_world(cell) - player.global_position
-	return Vector2(apart.x, apart.z).length() <= reach
+			for member in _grid.room_cells(anchor):
+				if lit.has(member):
+					_seen[anchor] = true
 
 
 func _place_key(cell: Vector2i) -> void:
