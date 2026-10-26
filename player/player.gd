@@ -78,6 +78,9 @@ var light_radius := 2
 var change_distance := 6.0
 
 ## One colour per slot, so players can tell each other apart.
+## The first of the render layers (bit numbers) that hold each slot's body, one layer per slot.
+const BODY_LAYER_FIRST := 10
+
 const SLOT_COLORS := [
 	Color(1.0, 0.60, 0.18), Color(0.35, 0.65, 1.0), Color(0.45, 0.85, 0.45), Color(0.85, 0.40, 0.85)]
 
@@ -214,7 +217,13 @@ func _is_supported() -> bool:
 ## Turns the body to face where it is going (or where the camera looks, in first person).
 func _update_visual(direction: Vector3, delta: float) -> void:
 	var first_person := _rig != null and _rig.is_first_person()
-	_visual.visible = not first_person
+	# The body is drawn on its own layer (besides the default one) that only its owner's first-person
+	# camera leaves out, so a teammate still sees it.
+	var own_layer := 1 << (BODY_LAYER_FIRST + slot)
+	_visual.layers = 1 | own_layer
+	if _rig != null:
+		var camera := _rig.get_camera()
+		camera.cull_mask = 0xFFFFF & ~own_layer if first_person else 0xFFFFF
 	if first_person:
 		_visual.rotation.y = _rig.yaw
 	elif direction.length_squared() > 0.01:
