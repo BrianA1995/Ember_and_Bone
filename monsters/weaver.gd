@@ -50,6 +50,8 @@ var _normal_reach := 0.9
 
 func _init() -> void:
 	move_speed = 1.1
+	# Striking a prisoner already in the dark would build web after web round them and trap them for ever.
+	needs_lit_candle = true
 	crosses_webs = true
 	after_hit_pause = 0.0
 	_normal_reach = reach

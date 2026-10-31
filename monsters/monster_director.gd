@@ -42,7 +42,7 @@ signal player_hit(monster: Monster, player: Player)
 @export_range(1, 6) var spawn_min_cells := 2
 @export_range(2, 10) var spawn_max_cells := 4
 ## How likely each kind is to be picked (a kind missing from here is never spawned at random). The
-## Warden is not picked: it comes to a gate (see _spawn_wardens).
+## Warden is not picked: it would come to a gate (see _spawn_wardens, off for now).
 @export var weights := {&"lurker": 4.0, &"thief": 2.0, &"weaver": 2.0, &"crawler": 3.0, &"moth": 3.0, &"leech": 2.0}
 ## The most of a kind there may be at once (a kind missing from here has no limit).
 @export var kind_limits := {&"lurker": 1}
@@ -52,6 +52,8 @@ signal player_hit(monster: Monster, player: Player)
 ## Seconds after a hit during which the same prisoner cannot be hit again, so a pile of monsters is not one long snuff.
 @export_range(0.0, 20.0, 0.5, "suffix:s") var hit_immunity := 4.0
 @export_group("Wardens")
+## Off for now: a Warden at the gate made reaching it too hard. The code stays, to be reworked.
+@export var wardens_enabled := false
 ## Keys the team must have taken before a Warden stands at a gate.
 @export_range(0, 10) var warden_after_keys := 2
 
@@ -306,7 +308,7 @@ func _spawn_cells() -> Array[Vector2i]:
 
 ## A Warden stands at every gate once the team has taken enough keys.
 func _spawn_wardens() -> void:
-	if run == null or run.keys_collected < warden_after_keys:
+	if not wardens_enabled or run == null or run.keys_collected < warden_after_keys:
 		return
 	for anchor in run.gate_anchors():
 		var guarded := false

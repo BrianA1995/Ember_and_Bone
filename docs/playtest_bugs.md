@@ -19,6 +19,10 @@ monster in the game window) and by the headless tests. Each entry says what was 
 | 8 | The spider rose through the air on its way to its web | It started climbing while still walking to the web, so it rose in the middle of the room. | `_hang` walks along the floor and only climbs once it is at the web. |
 | 9 | Rooms around the player did not change when the candle went out | `set_candle_lit` no longer changed anything. | When the candle goes out, `change_distance` shrinks to the dim sight range, so the rooms the player can no longer see are replaced (still lit for the game, still able to hold monsters). |
 
+| 12 | A fleeing Thief hit again and lost or re-stole keys | Its touch hit while it ran off with loot, overwriting what it carried and putting keys back into the deck again and again. | `Thief._touch` only hits in the HUNT state. |
+| 13 | A Weaver trapped an already-dark prisoner in web after web | It struck (and built a web) every 4 s even though there was no candle left to snuff. | `Monster.needs_lit_candle`; the Weaver sets it, so it ignores a prisoner whose candle is out. |
+| 14 | The Warden at the gate felt cheap (took keys) | Design decision from Brian. | `MonsterDirector.wardens_enabled` is false; the Warden code is kept but not spawned. |
+
 ### Visual
 
 | # | Bug | Cause | Fix |
@@ -32,8 +36,26 @@ monster in the game window) and by the headless tests. Each entry says what was 
 - Hint text names the buttons of the controller saved for that slot, so a keyboard player never sees "Hold A". If a saved gamepad is set for P1 the hints say so.
 - Several `monster_test` checks depend on the random maze and fail now and then: the web check, "hidden room", the thief-walks-to-the-key check, and (with a poor maze) the Director/Mimic/relighting group. They were not caused by this work, but this has not been proven by running the older code.
 
+- Moths, Crawlers and Thieves are frequent: hits every 7 to 17 s in several runs. Thieves spawn often (weight 2).
+- Holding the flame up at a Moth did not stop it snuffing the candle.
+- Solo has 4 keys and needs 3, so a fall plus a theft can lose the run ("Too few keys are left").
+- The results screen shows the HUD hints and pack dimmed beneath the overlay.
+- The bot's "stuck" lines include false positives while it stands in a gate, and some real clipping on props and door frames (a bot pathing issue).
+
+## Full playthrough (autoplay bot)
+`debug/autoplay.tscn` plays a solo ESCAPE game in the real window at 2x speed through the real input actions
+(run it with `project_run mode=custom scene=res://debug/autoplay.tscn autosave=false`; it never saves settings).
+It logs to `user://autoplay_log.txt`.
+
+- First win: 166.5 s of game time ("You escaped", 3 of 4 keys, 0 lost, 8 hits, 4 snuffs, 4 relights, 0 falls).
+- Final run, after all the fixes above: won at 94.9 s (3 keys, 4 hits, 1 snuff, 1 fall, 1 Lurker rush).
+- Earlier runs lost at 57 s (keys lost to a fall and a Thief) or got stuck in web loops; those led to fixes 12 and 13.
+- Seen working live: matches, spare candle relight, lamp, string (tie off), chalk (message list and confirm), key
+  pickup, key collapse and falling through the floor, the Leech slowing the walk, the Lurker rush (and leaving when the
+  prisoner froze), flame holding, the gate after 3 keys, and the results screen.
+
 ## Not covered by this playtest
-Matches were checked (a match relit the candle and used one). Lamp, string, chalk, walkie-talkie, keys and the leech in a live game were not reached by hand; they are covered by the headless tests only.
+Walkie-talkie (solo), the Mimic's trick, the results buttons ("Play again" and "Main menu") and co-op play-throughs were not exercised by the bot. The Warden is switched off.
 
 ## How to look at the monsters
 Run `debug/monster_gallery.tscn` in the editor (not headless). It shows each monster in front of the prisoner for 5 s, the Weaver on the floor, a wall and the ceiling.

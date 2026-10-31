@@ -63,6 +63,13 @@ func _act(delta: float) -> void:
 			_run_away(delta)
 
 
+## Only a Thief that is hunting steals: one running off with loot (or bolting) does not take more, which
+## would also lose what it already carries.
+func _touch() -> void:
+	if _state == State.HUNT:
+		super()
+
+
 func on_hit(player: Player) -> void:
 	var loot := director.steal_from(player)
 	if loot == &"":

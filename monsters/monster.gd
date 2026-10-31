@@ -21,6 +21,8 @@ extends Node3D
 @export var hits_on_touch := true
 ## Whether a hit puts the prisoner's candle out (a Thief only steals).
 @export var snuffs_candle := true
+## Whether it only hits a prisoner whose candle burns (one already in the dark gives it nothing to do).
+@export var needs_lit_candle := false
 ## How many rooms ahead it plans a walk.
 @export var path_depth := 14
 ## Whether a web across a doorway stops it.
@@ -269,6 +271,8 @@ func _flame_held_at_me() -> bool:
 
 func _touch() -> void:
 	for player in director.players:
+		if needs_lit_candle and not player.is_candle_lit():
+			continue
 		if director.offset(global_position, player.global_position).length() <= reach and director.hit(self, player):
 			_pause_left = after_hit_pause
 			return
