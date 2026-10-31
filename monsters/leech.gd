@@ -11,13 +11,17 @@ extends Monster
 ## How fast a clinging leech lets the prisoner walk, compared with normal (0.45 is less than half).
 @export_range(0.1, 1.0, 0.05) var slow_factor := 0.45
 ## Seconds it clings.
-@export_range(1.0, 120.0, 1.0, "suffix:s") var slow_seconds := 12.0
+@export_range(1.0, 180.0, 1.0, "suffix:s") var slow_seconds := 60.0
+## A prisoner who moves farther than this (metres) in one tick was carried off (a fall, a teleport):
+## the leech does not go with them.
+@export var carried_off_metres := 4.0
 ## How far, in rooms, it can sense a prisoner.
 @export_range(1, 12) var sense_cells := 5
 ## Where it sits on a prisoner, in metres from their middle.
 @export var cling_at := Vector3(0.32, 0.55, 0.05)
 
 var _host: Player
+var _host_last := Vector3.ZERO
 var _timer := 0.0
 
 
@@ -55,7 +59,21 @@ func _act(delta: float) -> void:
 func on_hit(player: Player) -> void:
 	_host = player
 	_timer = slow_seconds
+	_host_last = player.global_position
 	player.slow(slow_factor, slow_seconds)
+	player.fell.connect(_let_go, CONNECT_ONE_SHOT)
+
+
+## It comes off the prisoner and stays where it is: they are free of it, and it fades away.
+func _let_go() -> void:
+	if _host == null:
+		return
+	if is_instance_valid(_host):
+		_host.clear_slow()
+		if _host.fell.is_connected(_let_go):
+			_host.fell.disconnect(_let_go)
+	_host = null
+	fade_out()
 
 
 ## A leech on a prisoner is out of reach of a flame.
@@ -65,8 +83,15 @@ func _flame_held_at_me() -> bool:
 
 func _cling(delta: float) -> void:
 	_timer -= delta
-	if _timer <= 0.0 or not is_instance_valid(_host):
+	if not is_instance_valid(_host):
 		_host = null
 		fade_out()
+		return
+	if _host.global_position.distance_to(_host_last) > carried_off_metres:
+		_let_go()
+		return
+	_host_last = _host.global_position
+	if _timer <= 0.0:
+		_let_go()
 		return
 	global_position = _host.global_position + cling_at - Vector3(0.0, _host.global_position.y, 0.0)

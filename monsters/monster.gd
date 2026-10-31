@@ -54,6 +54,7 @@ var _wander_goal := Vector2i.ZERO
 
 
 func _ready() -> void:
+	add_to_group(SightGate.GROUP)
 	model = build_model()
 	add_child(model)
 	cell = director.cell_at(global_position)

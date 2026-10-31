@@ -18,6 +18,12 @@ func _ready() -> void:
 	_keys = _label(26, MenuTheme.INK, 0.0, 12.0)
 	_gate = _label(34, MenuTheme.EMBER, 0.0, 52.0)
 	_hint = _label(24, MenuTheme.EMBER, 1.0, -96.0)
+	# The hints sit above the pack, against the right edge, and grow upward as lines are added.
+	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_hint.offset_right = -InventoryBar.MARGIN
+	_hint.offset_bottom = -(InventoryBar.SLOT + InventoryBar.MARGIN + 12.0)
+	_hint.offset_top = _hint.offset_bottom - 36.0
+	_hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_message = _label(26, MenuTheme.INK, 0.5, 60.0)
 	_message.visible = false
 	_gate.visible = false

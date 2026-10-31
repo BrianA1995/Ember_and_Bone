@@ -28,6 +28,7 @@ var _picked := false
 
 
 func _ready() -> void:
+	add_to_group(SightGate.GROUP)
 	collision_layer = 0
 	collision_mask = 0xFFFFFFFF
 	monitorable = false

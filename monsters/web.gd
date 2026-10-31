@@ -2,10 +2,11 @@ class_name Web
 extends StaticBody3D
 ## A web across a doorway, spun by a Weaver. Solid to prisoners (it has a collision box); the
 ## MonsterDirector also counts it as a closed door when monsters plan a walk. A prisoner who holds the
-## flame up close to it, facing it, burns it away in `burn_seconds`; left alone it rots after `lifetime`.
+## flame up close to it, facing it, burns it away in `burn_seconds` (later this will cost wick); left
+## alone it rots after `lifetime` (about 10 seconds).
 ## Its look is a placeholder built in code: a loose net of pale threads.
 
-@export var lifetime := 45.0
+@export var lifetime := 10.0
 @export_range(0.2, 10.0, 0.1, "suffix:s") var burn_seconds := 1.5
 ## How near, in metres, the flame has to be.
 @export var burn_distance := 1.8

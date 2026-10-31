@@ -117,20 +117,30 @@ static func plan_for(count: int) -> Dictionary:
 	return PLANS[-1]
 
 
-## How many keys a prisoner can carry, and so how many slots they have beside the candle: what a
-## prisoner needs to get out (three alone, one with company).
+## How many keys a prisoner needs to get out (three alone, one with company).
 func capacity() -> int:
 	return keys_per_prisoner
 
 
-## Slots player `slot` has beside the candle (keys and items share them; a pouch adds one).
+## Slots a prisoner has beside the candle before any pouch: the keys they need to get out, and one more.
+## Keys and items share them.
+func base_slots() -> int:
+	return keys_per_prisoner + 1
+
+
+## Slots player `slot` has beside the candle (a pouch adds one).
 func total_slots(slot: int) -> int:
-	return bag.total_slots(slot) if bag else keys_per_prisoner
+	return bag.total_slots(slot) if bag else base_slots()
+
+
+## Can player `slot` take another key? They carry no more than they need to get out, and need a free slot.
+func can_take_key(slot: int) -> bool:
+	return keys_held[slot] < keys_per_prisoner and free_slots(slot) > 0
 
 
 ## Slots player `slot` has free.
 func free_slots(slot: int) -> int:
-	return bag.free_slots(slot) if bag else keys_per_prisoner - keys_held[slot]
+	return bag.free_slots(slot) if bag else base_slots() - keys_held[slot]
 
 
 ## What player `slot` can take in hand, in order: the candle, each key, each stack of items.
@@ -251,13 +261,10 @@ func gate_status(slot: int) -> String:
 ## What player `slot` can do right now, as a hint ("" for nothing).
 func prompt(slot: int) -> String:
 	var player := players[slot]
-	if player.is_snuffed():
-		var text: String = snuffed_hint.call(player) if snuffed_hint.is_valid() else "Your candle is out: hold {interact} beside a lit candle"
-		return text.replace("{interact}", _button_name(slot, &"interact"))
-	if free_slots(slot) > 0 and _offerer_near(player) != null:
-		return "%s: take the key" % _button_name(slot, &"interact")
-	var held := held_item(slot)
 	var lines: Array[String] = []
+	if can_take_key(slot) and _offerer_near(player) != null:
+		lines.append("%s: take the key" % _button_name(slot, &"interact"))
+	var held := held_item(slot)
 	if held.type != &"key" and use_hint.is_valid():
 		var use: String = use_hint.call(player, held.kind)
 		if use != "":
@@ -268,7 +275,11 @@ func prompt(slot: int) -> String:
 		lines.append("%s: put down" % _button_name(slot, &"drop_item"))
 	if hand_items(slot).size() > 1:
 		lines.append("%s: next item" % _button_name(slot, &"cycle_item"))
-	return "    ".join(lines)
+	# A snuffed candle is out whatever is in hand, so the way to light it again goes with the item's hints.
+	if player.is_snuffed():
+		var text: String = snuffed_hint.call(player) if snuffed_hint.is_valid() else "Your candle is out: hold {interact} beside a lit candle"
+		lines.append(text.replace("{interact}", _button_name(slot, &"interact")))
+	return "\n".join(lines)
 
 
 ## Lays out the deck: one stretch of `rooms_per_key` builds for each key, with the key somewhere in the
@@ -411,7 +422,7 @@ func drop_key(position: Vector3, cell: Vector2i, delay := 0.0) -> void:
 		return
 	var pickup := KeyPickup.new()
 	pickup.delay = delay
-	pickup.accepts = func(player: Player) -> bool: return free_slots(player.slot) > 0
+	pickup.accepts = func(player: Player) -> bool: return can_take_key(player.slot)
 	pickup.taken.connect(func(player: Player) -> void:
 		_loose.erase(pickup)
 		keys_held[player.slot] += 1
@@ -473,7 +484,7 @@ func _place_key(cell: Vector2i) -> void:
 	var pickup := KeyPickup.new()
 	var spawn := room.get_node_or_null("KeySpawn") as Node3D
 	pickup.position = spawn.position if spawn else Vector3(0.0, 1.0, 0.0)
-	pickup.accepts = func(player: Player) -> bool: return free_slots(player.slot) > 0
+	pickup.accepts = func(player: Player) -> bool: return can_take_key(player.slot)
 	pickup.taken.connect(_on_key_taken.bind(cell, room))
 	room.add_child(pickup)
 	_pickups[cell] = pickup
@@ -513,7 +524,7 @@ func _switch_items() -> void:
 ## A prisoner with a free hand takes a key from a teammate who is holding one out, when they press interact.
 func _hand_over_keys() -> void:
 	for taker in players:
-		if free_slots(taker.slot) <= 0:
+		if not can_take_key(taker.slot):
 			continue
 		if not Input.is_action_just_pressed(GameInput.action(taker.slot, &"interact")):
 			continue

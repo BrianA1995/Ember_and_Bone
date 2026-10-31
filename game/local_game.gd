@@ -130,6 +130,10 @@ func _add_escape() -> void:
 		_show_run_results("You escaped", ", ".join(names) + " got out.", escape))
 	escape.run_lost.connect(func(reason: String) -> void:
 		_show_run_results("The Cage keeps you", reason, escape))
+	var gate := SightGate.new()
+	gate.name = "SightGate"
+	add_child(gate)
+	gate.setup(players, $MazeManager as MazeManager)
 	_add_items()
 	if GameSettings.monsters:
 		_add_monsters()
@@ -144,7 +148,7 @@ func _add_items() -> void:
 	scatter.name = "ItemScatter"
 	add_child(scatter)
 	bag.keys_of = func(slot: int) -> int: return escape.keys_held[slot]
-	bag.base_slots = escape.capacity
+	bag.base_slots = escape.base_slots
 	escape.bag = bag
 	scatter.setup($MazeManager as MazeManager, bag, players.size())
 	var use := ItemUse.new()

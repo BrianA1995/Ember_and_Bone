@@ -21,7 +21,11 @@ extends Monster
 ## Prisoners farther than this (metres) see it on the ceiling; nearer than `wall_metres` on a wall.
 @export var ceiling_metres := 5.0
 @export var wall_metres := 2.5
-@export var ceiling_height := 2.7
+## Where its feet touch the ceiling (the underside is at 3.0 m), and how far along the path it climbs, per second.
+@export var ceiling_height := 3.1
+@export var climb_speed := 1.4
+## The inner face of a wall, from the middle of the room, in metres.
+@export var wall_surface := 1.9
 ## How far a hanging Weaver can reach, in metres.
 @export var perch_reach := 1.6
 
@@ -32,8 +36,12 @@ var _last_cell := Vector2i(-9999, -9999)
 var _life_left := 0.0
 var _web_cell := Vector2i.ZERO
 var _web_side := 0
-var _pose_position := Vector3.ZERO
-var _pose_basis := Basis.IDENTITY
+## How far along the way from the floor (0) up a wall and across the ceiling (5) it is, and how far it is heading;
+## see _path_position. It only ever crawls along the path, so it never crosses the room through the air.
+var _climb := 0.0
+var _climb_goal := 0.0
+var _wall_dir := Vector3(0.0, 0.0, -1.0)
+var _wall_out := 1.9
 var _normal_reach := 0.9
 
 
@@ -47,9 +55,10 @@ func _init() -> void:
 func _process(delta: float) -> void:
 	if model == null or _falling:
 		return
-	var k := 1.0 - exp(-5.0 * delta)
-	model.position = model.position.lerp(_pose_position, k)
-	model.basis = model.basis.slerp(_pose_basis, k).orthonormalized()
+	_climb = move_toward(_climb, _climb_goal, climb_speed * delta)
+	var local := Basis(Vector3.UP, -rotation.y) * _wall_dir
+	model.position = _path_position(local, _climb)
+	model.basis = _path_basis(local, _climb)
 
 
 func build_model() -> Node3D:
@@ -124,33 +133,59 @@ func _hang(delta: float) -> void:
 		return
 	var door := Vector3(RoomDefs.DIRS[_web_side].x, 0.0, RoomDefs.DIRS[_web_side].y)
 	move_toward_point(RoomDefs.cell_to_world(_web_cell) + door * 1.75, move_speed * 2.0, delta)
-	_set_pose_on_wall(door, 0.0, 1.2)
+	# It clings to the web itself (which stretches across the doorway, 2 m from the middle of the room).
+	_climb_to(door, 2.5, 2.0 - 1.75 - 0.1)
 
 
 ## Ceiling while the prisoners are far off, a wall as they near, the floor to strike.
 func _pose_for_distance() -> void:
 	var nearest := nearest_player()
 	var distance := INF if nearest == null else director.offset(global_position, nearest.global_position).length()
-	if distance > ceiling_metres:
-		_pose_position = Vector3(0.0, ceiling_height, 0.0)
-		_pose_basis = Basis(Vector3.RIGHT, PI)
-	elif distance > wall_metres:
+	# Which wall it climbs is chosen on the floor, and kept until it is back down.
+	if _climb <= 0.01:
 		var wall := _closed_side()
-		if wall >= 0:
-			_set_pose_on_wall(Vector3(RoomDefs.DIRS[wall].x, 0.0, RoomDefs.DIRS[wall].y), 1.75)
-		else:
-			_pose_position = Vector3(0.0, ceiling_height, 0.0)
-			_pose_basis = Basis(Vector3.RIGHT, PI)
+		_wall_dir = Vector3(RoomDefs.DIRS[maxi(wall, 0)].x, 0.0, RoomDefs.DIRS[maxi(wall, 0)].y)
+	if distance > ceiling_metres:
+		_climb_goal = 5.0
+	elif distance > wall_metres:
+		_climb_goal = 2.5
 	else:
-		_pose_position = Vector3.ZERO
-		_pose_basis = Basis.IDENTITY
+		_climb_goal = 0.0
+	_wall_out = wall_surface
 
 
-## Clings to a vertical surface in direction `world_direction` from the middle of its room.
-func _set_pose_on_wall(world_direction: Vector3, out: float, up := 1.3) -> void:
-	var local := Basis(Vector3.UP, -rotation.y) * world_direction
-	_pose_position = local * out + Vector3(0.0, up, 0.0)
-	_pose_basis = Basis(Vector3.UP.cross(local).normalized(), -PI * 0.5)
+## Heads for point `goal` on the path (see _path_position) up the wall in direction `world_direction`, whose
+## surface is `out` metres from the middle of the room.
+func _climb_to(world_direction: Vector3, goal: float, out: float) -> void:
+	_wall_dir = world_direction
+	_climb_goal = goal
+	_wall_out = out
+
+
+## Where the model is when it is `progress` of the way along its path: 0 on the floor in the middle of
+## the room, 1 on the floor at the wall, 2 and 3 the foot and the top of the wall, 4 on the ceiling at the
+## wall, 5 on the ceiling in the middle. `wall` is the way to the wall, in the monster's own frame. Following the
+## path is what keeps it on a surface the whole time: floor, wall, ceiling, never across the room.
+func _path_position(wall: Vector3, progress: float) -> Vector3:
+	var points: Array[Vector3] = [
+		Vector3.ZERO,
+		wall * (_wall_out - 0.35),
+		wall * _wall_out + Vector3(0.0, 0.4, 0.0),
+		wall * _wall_out + Vector3(0.0, ceiling_height - 0.5, 0.0),
+		wall * (_wall_out - 0.35) + Vector3(0.0, ceiling_height, 0.0),
+		Vector3(0.0, ceiling_height, 0.0),
+	]
+	var i := clampi(floori(progress), 0, 4)
+	return points[i].lerp(points[i + 1], progress - i)
+
+
+## How it is turned at `progress` (see _path_position): upright on the floor, flat on the wall with its back
+## away from it, upside down on the ceiling.
+func _path_basis(wall: Vector3, progress: float) -> Basis:
+	var on_wall := Basis(Vector3.UP.cross(wall).normalized(), -PI * 0.5) if wall.length() > 0.01 else Basis.IDENTITY
+	var turns: Array[Basis] = [Basis.IDENTITY, Basis.IDENTITY, on_wall, on_wall, Basis(Vector3.RIGHT, PI), Basis(Vector3.RIGHT, PI)]
+	var i := clampi(floori(progress), 0, 4)
+	return turns[i].slerp(turns[i + 1], progress - i)
 
 
 ## A side of the room it is in that has a wall.

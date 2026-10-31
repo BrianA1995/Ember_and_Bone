@@ -19,6 +19,7 @@ func _ready() -> void:
 	await _lurker()
 	await _thief()
 	await _dark_rule()
+	await _rules()
 	await _crawler_and_moth()
 	await _weaver()
 	_no_way()
@@ -189,6 +190,65 @@ func _dark_rule() -> void:
 	_check("with the candle burning it can be hunted from the dark", _director.can_chase(player, next), "")
 	_escape.keys_held[0] = 0
 	thief.queue_free()
+
+
+func _rules() -> void:
+	print("-- weaver path, webs, leech, sight")
+	var player := _game.players[0]
+	player.reset_position()
+	player.relight()
+	await _wait(1.0)
+	var here := _director.cell_at(player.global_position)
+	var found := _director.reachable(here, 4)
+	var far := here
+	for cell in found:
+		if found[cell].steps > found[far].steps and found[cell].steps >= 2:
+			far = cell
+	var web := Web.new()
+	_check("a web lasts about ten seconds", is_equal_approx(web.lifetime, 10.0), "%.1f" % web.lifetime)
+	web.free()
+	# The weaver crawls floor, wall, ceiling: never across the room through the air.
+	var weaver := _spawn(&"weaver", here) as Weaver
+	var wall := Vector3(0.0, 0.0, -1.0)
+	var last := weaver._path_position(wall, 0.0)
+	var smooth := true
+	var on_surface := true
+	var t := 0.05
+	while t <= 5.0:
+		var at := weaver._path_position(wall, t)
+		smooth = smooth and at.distance_to(last) < 0.2
+		on_surface = on_surface and (at.y < 0.01 or absf(at.z) > weaver.wall_surface - 0.4 or at.y > weaver.ceiling_height - 0.01)
+		last = at
+		t += 0.05
+	_check("the weaver's path has no jumps", smooth, "")
+	_check("and keeps to the floor, the wall and the ceiling", on_surface, "")
+	_check("it ends up on the ceiling, not in the air below it", is_equal_approx(weaver._path_position(wall, 5.0).y, weaver.ceiling_height), "")
+	weaver.queue_free()
+	# The leech: a minute's timer, and it stays behind when the prisoner falls.
+	var leech := _spawn(&"leech", here) as Leech
+	_check("a leech clings for a minute", is_equal_approx(leech.slow_seconds, 60.0), "%.0f" % leech.slow_seconds)
+	_director._immune.clear()
+	_director.hit(leech, player)
+	_check("the prisoner is slowed", player.is_slowed(), "")
+	var spot := leech.global_position
+	player.fell.emit()
+	player.global_position += Vector3(40.0, 0.0, 0.0)
+	await _wait(0.2)
+	_check("a fall frees them of it", not player.is_slowed() and not leech.is_clinging(), "")
+	_check("and it does not go with them", leech.global_position.distance_to(player.global_position) > 20.0 and leech.global_position.distance_to(spot) < 5.0, "")
+	leech.queue_free()
+	player.reset_position()
+	await _wait(0.8)
+	# What is in a room out of sight is not shown.
+	here = _director.cell_at(player.global_position)
+	var near := _spawn(&"thief", here) as Thief
+	var out_of_sight := _spawn(&"thief", far) as Thief
+	await _wait(0.3)
+	_check("a monster in a room they can see is shown", near.visible, "")
+	_check("one in a room they cannot see is hidden", not out_of_sight.visible, "")
+	near.queue_free()
+	out_of_sight.queue_free()
+	_director._immune.clear()
 
 
 func _chase() -> void:

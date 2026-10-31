@@ -342,6 +342,12 @@ func speed_scale() -> float:
 	return clampf(_slow_factor, 0.1, 1.0) if _slow_left > 0.0 else 1.0
 
 
+## Lifts any slowing at once (the thing that slowed the body has let go).
+func clear_slow() -> void:
+	_slow_left = 0.0
+	_slow_factor = 0.0
+
+
 func is_slowed() -> bool:
 	return _slow_left > 0.0
 
