@@ -17,6 +17,7 @@ func _ready() -> void:
 	GameSettings.monsters = true
 	await _start(1)
 	await _lurker()
+	await _sight_and_limits()
 	await _thief()
 	await _dark_rule()
 	await _rules()
@@ -72,25 +73,28 @@ func _lurker() -> void:
 	lurker.position = player.global_position
 	await _wait(0.1)
 	player.velocity = Vector3.ZERO
-	for i in 40:
+	for i in 30:
 		lurker._act(0.1)
 	_check("a lit prisoner standing still is never attacked", not player.is_snuffed(), "")
 	player.velocity = Vector3(2.0, 0.0, 0.0)
 	for i in 8:
 		lurker._act(0.1)
-	_check("a prisoner who moves in its line gets a grace period (0.8 s of 1.5 s: nothing yet)", not player.is_snuffed(), "")
+	_check("a prisoner who moves in its line gets a 2 s grace period (0.8 s of it: nothing yet)", not player.is_snuffed(), "")
 	player.velocity = Vector3.ZERO
 	for i in 20:
 		lurker._act(0.1)
-	_check("and stopping within it saves them", not player.is_snuffed(), "")
+	_check("and stopping within it saves them", not player.is_snuffed() and lurker._armed, "")
+	player.velocity = Vector3(0.3, 0.0, 0.0)
+	lurker._act(0.1)
+	_check("a slight bump is allowed", not player.is_snuffed(), "")
 	player.velocity = Vector3(2.0, 0.0, 0.0)
-	for i in 8:
-		lurker._act(0.1)
-	_check("the grace starts again from nothing", not player.is_snuffed(), "")
-	for i in 10:
-		lurker._act(0.1)
-	_check("a prisoner who keeps moving past the grace is hit", player.is_snuffed() and not player.is_candle_lit(), "")
+	lurker._act(0.1)
+	_check("but moving once the grace is spent is hit at once", player.is_snuffed() and not player.is_candle_lit(), "")
 	_check("with no red line to give it away", lurker.get_children().all(func(child: Node) -> bool: return child == lurker.model), "")
+	_check("and it shoots down the line (or, with no line to shoot along, is gone at once)", lurker._state == Lurker.State.CHARGE or lurker.is_going(), "")
+	for i in 40:
+		lurker._act(0.1)
+	_check("then it is gone: it fades out and never comes back", lurker._falling, "")
 	player.relight()
 	player.velocity = Vector3.ZERO
 	var closed := _closed_side(here)
@@ -98,6 +102,62 @@ func _lurker() -> void:
 	lurker.queue_free()
 	await _wait(0.1)
 	_director._immune.clear()
+	# Turning the camera gives the prisoner away as well; staying perfectly still sends it away.
+	var second := _spawn(&"lurker", here) as Lurker
+	second.position = player.global_position + Vector3(1.0, 0.0, 0.0)
+	await _wait(0.1)
+	player.velocity = Vector3.ZERO
+	second._act(0.1)
+	for i in 8:
+		player._visual.rotation.y += 0.2
+		second._act(0.1)
+	_check("a prisoner turning the camera in its line starts the grace period", second._grace < second.grace_seconds and second._grace > 0.0, "%.2f" % second._grace)
+	for i in 25:
+		player._visual.rotation.y += 0.2
+		second._act(0.1)
+	_check("and is hit if they keep turning", player.is_snuffed(), "")
+	player.relight()
+	_director._immune.clear()
+	second.queue_free()
+	await _wait(0.1)
+	var third := _spawn(&"lurker", here) as Lurker
+	third.position = player.global_position + Vector3(1.0, 0.0, 0.0)
+	await _wait(0.1)
+	for i in 60:
+		third._act(0.1)
+	_check("a prisoner who stays still beside it makes it lose interest", third._state == Lurker.State.LEAVE, "")
+	for i in 60:
+		third._act(0.1)
+	_check("and it wanders off and disappears", third._falling and not player.is_snuffed(), "")
+	third.queue_free()
+	await _wait(0.1)
+
+
+func _sight_and_limits() -> void:
+	print("-- out of sight, and one lurker at a time")
+	var player := _game.players[0]
+	var here := _director.cell_at(player.global_position)
+	var moth := _spawn(&"moth", here)
+	await _wait(0.1)
+	moth._mind_sight(0.1)
+	_check("a monster in a room a prisoner can see stays", moth._was_seen and not moth.is_going(), "")
+	_director._view[player] = {}
+	for i in 20:
+		moth._mind_sight(0.1)
+	_check("one out of sight for a moment is still there", not moth.is_going(), "")
+	for i in 20:
+		moth._mind_sight(0.1)
+	_check("but once out of every prisoner's sight for 3 s it is gone", moth.is_going(), "")
+	moth.queue_free()
+	var lurker := _spawn(&"lurker", here)
+	var saved: Dictionary = _director.weights
+	_director.weights = {&"lurker": 4.0}
+	for i in 5:
+		_director._spawn_random()
+	_check("the director never has more than one lurker about", _director.count_of(&"lurker") == 1, "%d" % _director.count_of(&"lurker"))
+	_director.weights = saved
+	lurker.queue_free()
+	await _wait(0.1)
 
 
 func _thief() -> void:

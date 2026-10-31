@@ -32,6 +32,8 @@ extends Node3D
 ## A prisoner holding the flame up within this many metres, facing it, within the cone (degrees), stuns it.
 @export var stun_range := 5.0
 @export var stun_cone_degrees := 40.0
+## Seconds out of every prisoner's sight, after it has been seen, before it is gone.
+@export var unseen_seconds := 3.0
 @export_group("After a hit")
 ## Seconds it stands still after hitting someone.
 @export var after_hit_pause := 3.0
@@ -45,6 +47,8 @@ var _stun_left := 0.0
 var _stun_immune := 0.0
 var _pause_left := 0.0
 var _falling := false
+var _was_seen := false
+var _unseen := 0.0
 var _replan := 0.0
 var _planned_in := Vector2i(-9999, -9999)
 var _centred_in := Vector2i(-9999, -9999)
@@ -64,6 +68,13 @@ func _physics_process(delta: float) -> void:
 	if director == null or _falling:
 		return
 	cell = director.cell_at(global_position)
+	# Where there is no room any more there is no monster.
+	if not director.room_exists(cell):
+		fade_out()
+		return
+	_mind_sight(delta)
+	if _falling:
+		return
 	if _stun_left > 0.0:
 		_stun_left -= delta
 		if _stun_left <= 0.0:
@@ -80,6 +91,20 @@ func _physics_process(delta: float) -> void:
 	_act(delta)
 	if hits_on_touch and not _falling:
 		_touch()
+
+
+## A monster only exists where a prisoner can see: once it has been seen and then its room is out of
+## every prisoner's sight for `unseen_seconds`, it is gone, so walking away and coming back finds nothing.
+func _mind_sight(delta: float) -> void:
+	if director.is_seen(cell):
+		_was_seen = true
+		_unseen = 0.0
+		return
+	if not _was_seen:
+		return
+	_unseen += delta
+	if _unseen >= unseen_seconds:
+		fade_out()
 
 
 # --- To fill in ------------------------------------------------------------------------
@@ -121,6 +146,11 @@ func stun(seconds: float) -> void:
 	_stun_left = seconds
 	model.rotation.z = 0.35
 	on_stunned()
+
+
+## Is it on its way out (fading or burning up)?
+func is_going() -> bool:
+	return _falling
 
 
 func is_stunned() -> bool:

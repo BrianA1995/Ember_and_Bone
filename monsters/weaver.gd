@@ -15,7 +15,9 @@ extends Monster
 ## How far, in rooms, it can sense a prisoner.
 @export_range(1, 10) var sense_cells := 4
 ## The chance it spins a web in the doorway behind it when it enters a new room.
-@export_range(0.0, 1.0, 0.05) var web_chance := 0.7
+@export_range(0.0, 1.0, 0.05) var web_chance := 0.1
+## Seconds it prowls, if it never snuffs a candle, before it loses interest and disappears.
+@export_range(5.0, 300.0, 1.0, "suffix:s") var prowl_seconds := 30.0
 ## Seconds after its first snuffing before it disappears.
 @export_range(5.0, 300.0, 1.0, "suffix:s") var life_seconds := 45.0
 ## Prisoners farther than this (metres) see it on the ceiling; nearer than `wall_metres` on a wall.
@@ -34,6 +36,7 @@ enum State { HUNT, PERCH }
 var _state := State.HUNT
 var _last_cell := Vector2i(-9999, -9999)
 var _life_left := 0.0
+var _prowled := 0.0
 var _web_cell := Vector2i.ZERO
 var _web_side := 0
 ## How far along the way from the floor (0) up a wall and across the ceiling (5) it is, and how far it is heading;
@@ -86,6 +89,10 @@ func _act(delta: float) -> void:
 	if _state == State.PERCH:
 		_hang(delta)
 		return
+	_prowled += delta
+	if _life_left <= 0.0 and _prowled >= prowl_seconds:
+		fade_out()
+		return
 	reach = _normal_reach
 	_spin_behind()
 	var found := director.reachable(cell, sense_cells, true)
@@ -132,7 +139,13 @@ func _hang(delta: float) -> void:
 		_state = State.HUNT
 		return
 	var door := Vector3(RoomDefs.DIRS[_web_side].x, 0.0, RoomDefs.DIRS[_web_side].y)
-	move_toward_point(RoomDefs.cell_to_world(_web_cell) + door * 1.75, move_speed * 2.0, delta)
+	var spot := RoomDefs.cell_to_world(_web_cell) + door * 1.75
+	# It walks to the web on the floor, and only climbs once it is there: never off the floor in mid-room.
+	if director.offset(global_position, spot).length() > 0.1:
+		_climb_goal = 0.0
+		if _climb < 0.05:
+			move_toward_point(spot, move_speed * 2.0, delta)
+		return
 	# It clings to the web itself (which stretches across the doorway, 2 m from the middle of the room).
 	_climb_to(door, 2.5, 2.0 - 1.75 - 0.1)
 

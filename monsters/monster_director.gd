@@ -44,6 +44,10 @@ signal player_hit(monster: Monster, player: Player)
 ## How likely each kind is to be picked (a kind missing from here is never spawned at random). The
 ## Warden is not picked: it comes to a gate (see _spawn_wardens).
 @export var weights := {&"lurker": 4.0, &"thief": 2.0, &"weaver": 2.0, &"crawler": 3.0, &"moth": 3.0, &"leech": 2.0}
+## The most of a kind there may be at once (a kind missing from here has no limit).
+@export var kind_limits := {&"lurker": 1}
+## Seconds after one of a kind appears before another of it may (a kind missing from here has no wait).
+@export var kind_gaps := {&"lurker": 90.0}
 @export_group("Hits")
 ## Seconds after a hit during which the same prisoner cannot be hit again, so a pile of monsters is not one long snuff.
 @export_range(0.0, 20.0, 0.5, "suffix:s") var hit_immunity := 4.0
@@ -63,6 +67,8 @@ var elapsed := 0.0
 ## For anything a monster decides by chance, so a maze's monsters repeat for the same seed.
 var rng := RandomNumberGenerator.new()
 var _spawn_timer := 0.0
+## When (in `elapsed`) each kind last appeared.
+var _appeared: Dictionary = {}
 ## 0 to 1: how many of the most monsters the director wants right now.
 var tension := 0.0
 var _keys_seen := 0
@@ -96,6 +102,7 @@ func _on_maze_rebuilt() -> void:
 	_webs.clear()
 	_noises.clear()
 	_immune.clear()
+	_appeared.clear()
 	for player in players:
 		player.relight()
 	grid = manager.grid
@@ -146,6 +153,25 @@ func can_chase(player: Player, monster_cell: Vector2i) -> bool:
 	return player.is_candle_lit() or _view.get(player, {}).has(monster_cell)
 
 
+## Can `player` see the room `monster_cell`? A monster only hits from a room the prisoner can see, so a
+## light never goes out to something that was not there to be seen.
+func can_see(player: Player, monster_cell: Vector2i) -> bool:
+	return not _view.has(player) or _view[player].has(monster_cell)
+
+
+## Can any prisoner see the room `monster_cell`?
+func is_seen(monster_cell: Vector2i) -> bool:
+	for player in players:
+		if can_see(player, monster_cell):
+			return true
+	return players.is_empty()
+
+
+## Is there a room standing at `cell`? A monster in a place with no room is going.
+func room_exists(cell: Vector2i) -> bool:
+	return not grid.get_cell(cell).is_empty() and manager.view.room_at(cell) != null
+
+
 ## Tension rises with time and with each key the team takes.
 func _update_tension(delta: float) -> void:
 	tension = minf(tension + tension_per_minute / 60.0 * delta, 1.0)
@@ -192,6 +218,7 @@ func spawn(kind: StringName, cell: Vector2i) -> Monster:
 	monster.position = RoomDefs.cell_to_world(cell)
 	add_child(monster)
 	monsters.append(monster)
+	_appeared[kind] = elapsed
 	monster.tree_exited.connect(func() -> void: monsters.erase(monster))
 	# Pursuit must not keep chasing something that is gone.
 	monster.tree_exiting.connect(func() -> void:
@@ -201,7 +228,8 @@ func spawn(kind: StringName, cell: Vector2i) -> Monster:
 
 
 func _spawn_random() -> void:
-	var kinds: Array = weights.keys()
+	var kinds: Array = weights.keys().filter(func(kind: StringName) -> bool:
+		return count_of(kind) < kind_limits.get(kind, 1000) and elapsed - _appeared.get(kind, -INF) >= kind_gaps.get(kind, 0.0))
 	var cells := _spawn_cells()
 	if kinds.is_empty() or cells.is_empty():
 		return
@@ -213,6 +241,15 @@ func _spawn_random() -> void:
 			return
 		monsters.erase(monster)
 		monster.queue_free()
+
+
+## How many monsters of `kind` are about (one on its way out does not count).
+func count_of(kind: StringName) -> int:
+	var total := 0
+	for monster in monsters:
+		if monster.get_script() == kinds()[kind] and not monster.is_going():
+			total += 1
+	return total
 
 
 ## One of `cells`, chosen at random but more often the ones in the direction a prisoner is heading.
@@ -440,7 +477,7 @@ func can_hit(player: Player) -> bool:
 
 ## `monster` hits `player`: the candle goes out. Returns false (and does nothing) if they were hit lately.
 func hit(monster: Monster, player: Player) -> bool:
-	if not can_hit(player):
+	if not can_hit(player) or not can_see(player, monster.cell):
 		return false
 	_immune[player] = hit_immunity
 	tension = maxf(tension - hit_relief, 0.0)

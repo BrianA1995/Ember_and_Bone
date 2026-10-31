@@ -76,6 +76,12 @@ func _let_go() -> void:
 	fade_out()
 
 
+## Once it clings it has done its hitting: it does not snuff the same prisoner again and again.
+func _touch() -> void:
+	if _host == null:
+		super()
+
+
 ## A leech on a prisoner is out of reach of a flame.
 func _flame_held_at_me() -> bool:
 	return _host == null and super()
