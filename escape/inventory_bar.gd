@@ -9,7 +9,7 @@ const GAP := 8.0
 const MARGIN := 20.0
 
 var _slots := 0
-var _keys := 0
+var _contents: Array[Dictionary] = []
 var _equipped := 0
 var _candle_lit := true
 
@@ -22,12 +22,13 @@ func _ready() -> void:
 	anchor_bottom = 1.0
 
 
-## `keys` held, `capacity` the most that can be carried; `equipped` is 0 for the candle, else which key is in hand.
-func set_state(keys: int, capacity: int, equipped: int, candle_lit: bool) -> void:
-	if keys == _keys and capacity + 1 == _slots and equipped == _equipped and candle_lit == _candle_lit:
+## `contents` the keys and item stacks carried (each {type, kind, count}, one per slot taken), `slots` the
+## slots there are beside the candle; `equipped` is 0 for the candle, else which one is in hand.
+func set_state(contents: Array[Dictionary], slots: int, equipped: int, candle_lit: bool) -> void:
+	if contents == _contents and slots + 1 == _slots and equipped == _equipped and candle_lit == _candle_lit:
 		return
-	_keys = keys
-	_slots = capacity + 1
+	_contents = contents.duplicate(true)
+	_slots = slots + 1
 	_equipped = equipped
 	_candle_lit = candle_lit
 	var width := _slots * SLOT + (_slots - 1) * GAP
@@ -41,14 +42,31 @@ func set_state(keys: int, capacity: int, equipped: int, candle_lit: bool) -> voi
 func _draw() -> void:
 	for i in _slots:
 		var box := Rect2(i * (SLOT + GAP), 0.0, SLOT, SLOT)
-		var filled := i == 0 or i <= _keys
+		var filled := i == 0 or i <= _contents.size()
 		var chosen := i == _equipped
 		draw_rect(box, Color(0.05, 0.045, 0.04, 0.85 if filled else 0.45))
 		draw_rect(box, MenuTheme.EMBER if chosen else MenuTheme.DIM, false, 3.0 if chosen else 1.5)
 		if i == 0:
 			_draw_candle(box.get_center())
 		elif filled:
-			_draw_key(box.get_center())
+			var entry := _contents[i - 1]
+			if entry.type == &"key":
+				_draw_key(box.get_center())
+			else:
+				_draw_item(box, entry.kind, entry.count)
+
+
+## An item's placeholder picture: its colour in a rounded block, with its first letter and, if more than one, its count.
+func _draw_item(box: Rect2, kind: StringName, count: int) -> void:
+	var color: Color = ItemDefs.ITEMS[kind].color
+	var inner := box.grow(-14.0)
+	draw_rect(inner, color.darkened(0.35))
+	draw_rect(inner, color, false, 2.0)
+	var font := ThemeDB.fallback_font
+	var letter := ItemDefs.label(kind).substr(0, 1)
+	draw_string(font, inner.position + Vector2(0.0, inner.size.y * 0.72), letter, HORIZONTAL_ALIGNMENT_CENTER, inner.size.x, 26, Color.WHITE)
+	if count > 1:
+		draw_string(font, box.position + Vector2(0.0, SLOT - 4.0), str(count), HORIZONTAL_ALIGNMENT_RIGHT, SLOT - 6.0, 18, MenuTheme.INK)
 
 
 func _draw_candle(centre: Vector2) -> void:

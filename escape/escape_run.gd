@@ -79,6 +79,10 @@ var players: Array[Player] = []
 ## Called as snuffed_hint.call(player) -> String for what a snuffed prisoner can do ("{interact}" is
 ## replaced by the button's name); set by whoever knows how a candle is lit again.
 var snuffed_hint := Callable()
+## The items the prisoners carry (keys share its slots); set by whoever deals items.
+var bag: ItemBag
+## Called as use_hint.call(player, held_kind) -> String for what the item in hand does ("" for nothing).
+var use_hint := Callable()
 
 var _manager: MazeManager
 var _grid: MazeGrid
@@ -117,6 +121,42 @@ static func plan_for(count: int) -> Dictionary:
 ## prisoner needs to get out (three alone, one with company).
 func capacity() -> int:
 	return keys_per_prisoner
+
+
+## Slots player `slot` has beside the candle (keys and items share them; a pouch adds one).
+func total_slots(slot: int) -> int:
+	return bag.total_slots(slot) if bag else keys_per_prisoner
+
+
+## Slots player `slot` has free.
+func free_slots(slot: int) -> int:
+	return bag.free_slots(slot) if bag else keys_per_prisoner - keys_held[slot]
+
+
+## What player `slot` can take in hand, in order: the candle, each key, each stack of items.
+## Each is {"type": &"candle" | &"key" | &"item", "kind": StringName, "count": int}.
+func hand_items(slot: int) -> Array[Dictionary]:
+	var list: Array[Dictionary] = [{"type": &"candle", "kind": &"candle", "count": 1}]
+	for i in keys_held[slot]:
+		list.append({"type": &"key", "kind": &"key", "count": 1})
+	if bag:
+		for entry in bag.entries(slot):
+			list.append({"type": &"item", "kind": entry.kind, "count": entry.count})
+	return list
+
+
+## What player `slot` has in hand now (see hand_items).
+func held_item(slot: int) -> Dictionary:
+	var list := hand_items(slot)
+	return list[mini(equipped[slot], list.size() - 1)]
+
+
+## What fills the slots, for the pack bar: a key or a stack of items each, in the order of hand_items
+## (without the candle).
+func slot_contents(slot: int) -> Array[Dictionary]:
+	var list := hand_items(slot)
+	list.remove_at(0)
+	return list
 
 
 ## Keys the team needs in all for the gate to open: what each prisoner needs, for each who must be inside.
@@ -212,13 +252,21 @@ func prompt(slot: int) -> String:
 	if player.is_snuffed():
 		var text: String = snuffed_hint.call(player) if snuffed_hint.is_valid() else "Your candle is out: hold {interact} beside a lit candle"
 		return text.replace("{interact}", _button_name(slot, &"interact"))
-	if keys_held[slot] < capacity() and _offerer_near(player) != null:
+	if free_slots(slot) > 0 and _offerer_near(player) != null:
 		return "%s: take the key" % _button_name(slot, &"interact")
-	if players.size() > 1 and equipped[slot] > 0:
-		return "Hold %s to hold out your key" % _button_name(slot, &"hold_flame")
-	if keys_held[slot] > 0:
-		return "%s: %s" % [_button_name(slot, &"cycle_item"), "take out the candle" if equipped[slot] > 0 else "take out a key"]
-	return ""
+	var held := held_item(slot)
+	var lines: Array[String] = []
+	if held.type != &"key" and use_hint.is_valid():
+		var use: String = use_hint.call(player, held.kind)
+		if use != "":
+			lines.append(use.replace("{use}", _button_name(slot, &"use_item")))
+	if players.size() > 1 and held.type == &"key":
+		lines.append("Hold %s to hold out your key" % _button_name(slot, &"hold_flame"))
+	if held.type != &"candle":
+		lines.append("%s: put down" % _button_name(slot, &"drop_item"))
+	if hand_items(slot).size() > 1:
+		lines.append("%s: next item" % _button_name(slot, &"cycle_item"))
+	return "    ".join(lines)
 
 
 ## Lays out the deck: one stretch of `rooms_per_key` builds for each key, with the key somewhere in the
@@ -354,13 +402,14 @@ func take_key_from(player: Player) -> bool:
 
 
 ## A key lies loose at `position` in `cell`'s room, dropped by a monster. Anyone with a free hand can take it.
-func drop_key(position: Vector3, cell: Vector2i) -> void:
+func drop_key(position: Vector3, cell: Vector2i, delay := 0.0) -> void:
 	var room := _manager.view.room_at(cell)
 	if room == null:
 		key_returned()
 		return
 	var pickup := KeyPickup.new()
-	pickup.accepts = func(player: Player) -> bool: return keys_held[player.slot] < capacity()
+	pickup.delay = delay
+	pickup.accepts = func(player: Player) -> bool: return free_slots(player.slot) > 0
 	pickup.taken.connect(func(player: Player) -> void:
 		_loose.erase(pickup)
 		keys_held[player.slot] += 1
@@ -368,6 +417,16 @@ func drop_key(position: Vector3, cell: Vector2i) -> void:
 	room.add_child(pickup)
 	pickup.global_position = Vector3(position.x, 1.0, position.z)
 	_loose[pickup] = cell
+
+
+## Player `player` puts a key down in front of them (false if they have none); it stays where it lies.
+func put_down_key(player: Player, position: Vector3, cell: Vector2i) -> bool:
+	if keys_held[player.slot] <= 0:
+		return false
+	keys_held[player.slot] -= 1
+	keys_collected -= 1
+	drop_key(position, cell, 1.2)
+	return true
 
 
 ## A key a monster took has gone from the maze for now: another alcove is dealt for it a little later.
@@ -412,7 +471,7 @@ func _place_key(cell: Vector2i) -> void:
 	var pickup := KeyPickup.new()
 	var spawn := room.get_node_or_null("KeySpawn") as Node3D
 	pickup.position = spawn.position if spawn else Vector3(0.0, 1.0, 0.0)
-	pickup.accepts = func(player: Player) -> bool: return keys_held[player.slot] < capacity()
+	pickup.accepts = func(player: Player) -> bool: return free_slots(player.slot) > 0
 	pickup.taken.connect(_on_key_taken.bind(cell, room))
 	room.add_child(pickup)
 	_pickups[cell] = pickup
@@ -443,14 +502,16 @@ func _on_key_taken(player: Player, cell: Vector2i, room: Node3D) -> void:
 ## Pressing the switch button moves on to the next item: candle, first key, second key ... candle.
 func _switch_items() -> void:
 	for player in players:
+		if player.controls_locked:
+			continue
 		if Input.is_action_just_pressed(GameInput.action(player.slot, &"cycle_item")):
-			equipped[player.slot] = (equipped[player.slot] + 1) % (keys_held[player.slot] + 1)
+			equipped[player.slot] = (equipped[player.slot] + 1) % hand_items(player.slot).size()
 
 
 ## A prisoner with a free hand takes a key from a teammate who is holding one out, when they press interact.
 func _hand_over_keys() -> void:
 	for taker in players:
-		if keys_held[taker.slot] >= capacity():
+		if free_slots(taker.slot) <= 0:
 			continue
 		if not Input.is_action_just_pressed(GameInput.action(taker.slot, &"interact")):
 			continue
@@ -459,7 +520,7 @@ func _hand_over_keys() -> void:
 			continue
 		keys_held[giver.slot] -= 1
 		keys_held[taker.slot] += 1
-		equipped[giver.slot] = mini(equipped[giver.slot], keys_held[giver.slot])
+		equipped[giver.slot] = 0
 		key_passed.emit(giver.slot, taker.slot)
 
 
@@ -543,12 +604,12 @@ func _lose(reason: String) -> void:
 func _button_name(slot: int, base: StringName) -> String:
 	var device: int = GameSettings.controllers[slot] if slot < GameSettings.controllers.size() else GameInput.DEVICE_KEYBOARD
 	var names := {
-		GameInput.DEVICE_KEYBOARD: {&"interact": "E", &"hold_flame": "F", &"cycle_item": "Tab"},
-		GameInput.DEVICE_ARROWS: {&"interact": "Enter", &"hold_flame": "/", &"cycle_item": "."},
+		GameInput.DEVICE_KEYBOARD: {&"interact": "E", &"hold_flame": "F", &"cycle_item": "Tab", &"use_item": "R", &"drop_item": "Q"},
+		GameInput.DEVICE_ARROWS: {&"interact": "Enter", &"hold_flame": "/", &"cycle_item": ".", &"use_item": ",", &"drop_item": ";"},
 	}
 	if names.has(device):
 		return names[device][base]
-	return {&"interact": "A", &"hold_flame": "LT", &"cycle_item": "D-pad"}[base]
+	return {&"interact": "A", &"hold_flame": "LT", &"cycle_item": "D-pad", &"use_item": "X", &"drop_item": "B"}[base]
 
 
 func _refresh() -> void:
@@ -556,9 +617,12 @@ func _refresh() -> void:
 	for held in keys_held:
 		carrying += 1 if held > 0 else 0
 	for slot in _huds.size():
-		# A key that was handed on (or lost) can't stay in hand.
-		equipped[slot] = mini(equipped[slot], keys_held[slot])
-		players[slot].set_candle_lit(equipped[slot] == 0)
-		_carriers[slot].set_state(keys_held[slot], equipped[slot] > 0)
-		_huds[slot].show_inventory(keys_held[slot], capacity(), equipped[slot], players[slot].is_candle_lit())
+		# Something handed on, dropped or used up can't stay in hand.
+		var count := hand_items(slot).size()
+		if equipped[slot] >= count:
+			equipped[slot] = 0
+		var held := held_item(slot)
+		players[slot].set_candle_lit(held.type == &"candle")
+		_carriers[slot].set_state(keys_held[slot], held.type == &"key")
+		_huds[slot].show_inventory(slot_contents(slot), total_slots(slot), equipped[slot], players[slot].is_candle_lit())
 		_huds[slot].show_state(keys_held[slot], keys_per_prisoner, carrying, at_gate_needed, gate_status(slot), prompt(slot))

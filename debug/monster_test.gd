@@ -106,7 +106,7 @@ func _thief() -> void:
 	var thief := _spawn(&"thief", _director.cell_at(player.global_position)) as Thief
 	await _wait(0.1)
 	_director.hit(thief, player)
-	_check("the thief snuffs the candle", player.is_snuffed(), "")
+	_check("the thief leaves the candle burning", not player.is_snuffed(), "")
 	_check("and takes the key", _escape.keys_held[0] == 0 and thief.is_carrying(), "%d" % _escape.keys_held[0])
 	_check("a stolen key is no longer collected", _escape.keys_collected == 0, "%d" % _escape.keys_collected)
 	thief.stun(2.0)

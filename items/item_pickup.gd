@@ -12,6 +12,8 @@ signal taken(player: Player)
 
 ## Called as accepts.call(player) -> bool; false leaves it where it lies.
 var accepts := Callable()
+## Seconds before it can be picked up (a dropped one is left alone a moment, so it is not taken straight back).
+var delay := 0.0
 
 var _model: Node3D
 var _done := false
@@ -34,7 +36,10 @@ func _process(delta: float) -> void:
 	_model.rotation.y += spin_speed * delta
 
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
+	if delay > 0.0:
+		delay -= delta
+		return
 	if _done:
 		return
 	for body in get_overlapping_bodies():

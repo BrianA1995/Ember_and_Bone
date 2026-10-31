@@ -28,6 +28,7 @@ func _ready() -> void:
 	_pack()
 	await _dealing()
 	await _relighting()
+	await _using()
 	print("ITEM TEST: %s" % ("PASS" if _failures == 0 else "FAIL (%d)" % _failures))
 	get_tree().quit(0 if _failures == 0 else 1)
 
@@ -35,21 +36,30 @@ func _ready() -> void:
 func _pack() -> void:
 	print("-- the pack")
 	_bag.setup(1)
+	_game.escape.keys_held[0] = 0
+	_check("a lone prisoner has three slots", _bag.total_slots(0) == 3, "%d" % _bag.total_slots(0))
 	_check("it starts empty", _bag.summary(0) == "", "")
-	_check("matches come three to a box", _bag.add(0, &"matches", 3) == 3 and _bag.count(0, &"matches") == 3, "")
-	_check("a pack holds only so many", _bag.add(0, &"matches", 9) == 3 and not _bag.has_room(0, &"matches"), "")
-	_check("using one takes one", _bag.take(0, &"matches") and _bag.count(0, &"matches") == 5, "")
+	_check("matches come three to a slot", _bag.add(0, &"matches", 3) == 3 and _bag.used_slots(0) == 1, "")
+	_check("a second box takes a second slot", _bag.add(0, &"matches", 3) == 3 and _bag.used_slots(0) == 2, "")
+	_check("a pack holds only so many matches", _bag.add(0, &"matches", 3) == 0, "")
+	_check("using one takes one", _bag.take(0, &"matches") and _bag.count(0, &"matches") == 5 and _bag.used_slots(0) == 2, "")
 	_check("you cannot use what you do not have", not _bag.take(0, &"spare_candle"), "")
-	_bag.add(0, &"spare_candle", 1)
-	_check("the line lists what is carried", _bag.summary(0) == "Matches 5    Spare candle 1", _bag.summary(0))
+	_check("a lamp takes the last slot", _bag.add(0, &"lamp", 1) == 1 and _bag.free_slots(0) == 0, "")
+	_check("then nothing more fits", not _bag.has_room(0, &"string") and not _bag.has_room(0, &"spare_candle"), "")
+	_check("a pouch needs no slot and gives one", _bag.add(0, &"pouch", 1) == 1 and _bag.total_slots(0) == 4 and _bag.free_slots(0) == 1, "")
+	_check("a key takes a slot too", _game.escape.keys_held.size() == 1, "")
+	_game.escape.keys_held[0] = 1
+	_check("so a carried key uses the free slot", _bag.free_slots(0) == 0 and not _bag.has_room(0, &"string"), "")
+	_game.escape.keys_held[0] = 0
+	_check("the pouch can be worn twice, not three times", _bag.add(0, &"pouch", 1) == 1 and _bag.add(0, &"pouch", 1) == 0, "")
 	_bag.setup(1)
 
 
 func _dealing() -> void:
 	print("-- dealing")
-	_check("three cards for a lone prisoner", _dealer.deck.size() == 3, "%d" % _dealer.deck.size())
+	_check("eight cards for a lone prisoner", _dealer.deck.size() == 8, "%d" % _dealer.deck.size())
 	var kinds: Array = _dealer.deck.map(func(card: Dictionary) -> StringName: return card.kind)
-	_check("matches, a spare candle, matches", kinds == [&"matches", &"spare_candle", &"matches"], "%s" % [kinds])
+	_check("every sort of item is dealt", kinds.has(&"pouch") and kinds.has(&"lamp") and kinds.has(&"string") and kinds.has(&"chalk") and kinds.has(&"walkie"), "%s" % [kinds])
 	var grid: MazeGrid = _manager.grid
 	var cell := Vector2i.ZERO
 	for candidate in grid.cells():
@@ -74,7 +84,7 @@ func _dealing() -> void:
 	player.global_position = (pickups[0] as Node3D).global_position + Vector3(0.0, 0.3, 0.0)
 	await _wait(0.4)
 	_check("walking over it takes it", _bag.count(0, &"matches") == 3, "%d" % _bag.count(0, &"matches"))
-	_check("and the pane shows it", _game.escape.hud_at(0)._gear.text == "Matches 3", _game.escape.hud_at(0)._gear.text)
+	_check("and it takes a slot", _bag.used_slots(0) == 1, "")
 
 
 func _relighting() -> void:
@@ -109,6 +119,55 @@ func _relighting() -> void:
 	Input.action_release(button)
 	await _wait(0.2)
 	_check("one press lights the spare at once", not player.is_snuffed() and _bag.count(0, &"spare_candle") == 0, "")
+
+
+func _using() -> void:
+	print("-- using and dropping")
+	var player := _game.players[0]
+	var escape := _game.escape
+	var use := _game.get_node("ItemUse") as ItemUse
+	var cell := _manager.grid.wrap_cell(RoomDefs.world_to_cell(player.global_position))
+	var room := _manager.view.room_at(cell)
+	_bag.setup(1)
+	player.relight()
+	_bag.add(0, &"lamp", 1)
+	escape.equipped[0] = 1
+	await _wait(0.1)
+	_check("an item in hand puts the candle away", not player.is_candle_lit(), "")
+	_check("and the hint names the button", escape.prompt(0).contains("set the lamp down") and escape.prompt(0).contains("put down"), escape.prompt(0))
+	use._use(player)
+	_check("the lamp is set down and used up", _bag.count(0, &"lamp") == 0 and get_tree().get_nodes_in_group("light_sources").any(func(n: Node) -> bool: return n is Lamp), "")
+	await _wait(0.1)
+	_check("the candle is back in hand", player.is_candle_lit() and escape.equipped[0] == 0, "")
+	_bag.add(0, &"matches", 3)
+	escape.equipped[0] = 1
+	use._drop(player)
+	_check("a dropped stack leaves the pack", _bag.count(0, &"matches") == 0, "")
+	var lying := _manager.view.room_at(_manager.grid.wrap_cell(RoomDefs.world_to_cell(player.global_position + player.facing() * 0.7))).find_children("*", "ItemPickup", false, false)
+	_check("and lies on the floor ahead", lying.size() >= 1, "%d" % lying.size())
+	await _wait(0.3)
+	_check("it is not taken straight back", _bag.count(0, &"matches") == 0, "")
+	escape.keys_held[0] = 1
+	escape.keys_collected = 1
+	escape.equipped[0] = 1
+	use._drop(player)
+	_check("a key can be put down", escape.keys_held[0] == 0 and escape._loose.size() >= 1, "")
+	escape.equipped[0] = 0
+	use._drop(player)
+	_check("the candle cannot be dropped", escape.hand_items(0).size() == 1, "")
+	_check("chalk writes a message on the wall", use.chalk.mark(player, "Key here") and room.find_children("*", "Label3D", false, false).size() == 1, "")
+	use._broadcast(player, "Come here")
+	_check("the walkie-talkie shows the message in the pane", escape.hud_at(0)._message.visible and escape.hud_at(0)._message.text.contains("Come here"), "")
+	_bag.setup(1)
+	_bag.add(0, &"string", 1)
+	escape.equipped[0] = 1
+	use._use(player)
+	_check("the string is tied on", _bag.count(0, &"string") == 0 and use._strings.has(0) and use._strings[0].active, "")
+	await _wait(0.1)
+	player.global_position += Vector3(2.0, 0.0, 0.0)
+	await _wait(0.3)
+	use._use(player)
+	_check("using it again ties it off", not use._strings[0].active, "")
 
 
 func _wait(seconds: float) -> void:

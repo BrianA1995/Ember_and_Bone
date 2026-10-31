@@ -135,7 +135,7 @@ func _add_escape() -> void:
 		_add_monsters()
 
 
-## Items to find in the maze (matches, a spare candle) and a line in each pane for what is carried.
+## Items to find in the maze, sharing the prisoners' inventory slots with their keys, and the use and drop buttons.
 func _add_items() -> void:
 	var bag := ItemBag.new()
 	bag.name = "ItemBag"
@@ -143,8 +143,14 @@ func _add_items() -> void:
 	var dealer := ItemDealer.new()
 	dealer.name = "ItemDealer"
 	add_child(dealer)
+	bag.keys_of = func(slot: int) -> int: return escape.keys_held[slot]
+	bag.base_slots = escape.capacity
+	escape.bag = bag
 	dealer.setup($MazeManager as MazeManager, bag, players.size())
-	bag.changed.connect(func(slot: int) -> void: escape.hud_at(slot).show_gear(bag.summary(slot)))
+	var use := ItemUse.new()
+	use.name = "ItemUse"
+	add_child(use)
+	use.setup(players, escape, bag, dealer, $MazeManager as MazeManager)
 
 
 ## The monsters, and the ways to get a snuffed candle lit again.

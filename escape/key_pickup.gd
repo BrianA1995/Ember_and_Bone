@@ -19,6 +19,8 @@ signal taken(player: Player)
 
 ## Optional: called as accepts.call(player) -> bool; false leaves the key where it lies.
 var accepts := Callable()
+## Seconds before it can be picked up (a dropped one is left alone a moment, so it is not taken straight back).
+var delay := 0.0
 
 var _model: Node3D
 var _time := randf() * TAU
@@ -44,7 +46,10 @@ func _process(delta: float) -> void:
 	_model.position.y = sin(_time * bob_speed) * bob_height
 
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
+	if delay > 0.0:
+		delay -= delta
+		return
 	if _picked:
 		return
 	for body in get_overlapping_bodies():

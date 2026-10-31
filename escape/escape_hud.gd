@@ -7,7 +7,8 @@ extends Control
 var _keys: Label
 var _gate: Label
 var _hint: Label
-var _gear: Label
+var _message: Label
+var _message_left := 0.0
 var _inventory := InventoryBar.new()
 
 
@@ -17,20 +18,29 @@ func _ready() -> void:
 	_keys = _label(26, MenuTheme.INK, 0.0, 12.0)
 	_gate = _label(34, MenuTheme.EMBER, 0.0, 52.0)
 	_hint = _label(24, MenuTheme.EMBER, 1.0, -96.0)
-	_gear = _label(22, MenuTheme.INK, 1.0, -60.0)
+	_message = _label(26, MenuTheme.INK, 0.5, 60.0)
+	_message.visible = false
 	_gate.visible = false
 	_hint.visible = false
 	add_child(_inventory)
 
 
-## What the prisoner carries besides the candle and keys ("" for nothing), as one line above the hint.
-func show_gear(text: String) -> void:
-	_gear.text = text
+## A note across the middle of the pane for `seconds` (a teammate's message, a warning).
+func show_message(text: String, seconds := 5.0) -> void:
+	_message.text = text
+	_message.visible = true
+	_message_left = seconds
 
 
-## The items in the bottom right: `keys` held of `capacity`, which one is in hand (0 the candle).
-func show_inventory(keys: int, capacity: int, equipped: int, candle_lit: bool) -> void:
-	_inventory.set_state(keys, capacity, equipped, candle_lit)
+func _process(delta: float) -> void:
+	if _message_left > 0.0:
+		_message_left -= delta
+		_message.visible = _message_left > 0.0
+
+
+## The pack in the bottom right: what is carried, how many slots there are, which is in hand (0 the candle).
+func show_inventory(contents: Array[Dictionary], slots: int, equipped: int, candle_lit: bool) -> void:
+	_inventory.set_state(contents, slots, equipped, candle_lit)
 
 
 ## `held` keys on this player, of the `needed` each prisoner needs to get out. Alone (needing more

@@ -64,7 +64,7 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	var sources := _light_sources()
 	# A light with no radius is a player standing in the dark: rooms around them must not be seen to move.
-	view.instant = sources.any(func(source: Dictionary) -> bool: return source.radius == 0)
+	view.instant = sources.any(func(source: Dictionary) -> bool: return source.radius == 0 and not source.keep)
 	reveal.update(sources, delta)
 	view.instant = false
 
@@ -155,5 +155,7 @@ func _light_sources() -> Array:
 			"radius": node.light_radius,
 			"position": position,
 			"reach": node.change_distance,
+			# A lamp or a string keeps a room alive but is no one standing in the dark.
+			"keep": node.get("keep_only") == true,
 		})
 	return sources

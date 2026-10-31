@@ -2,7 +2,7 @@ class_name SettingsPage
 extends VBoxContainer
 ## The settings screen: display, audio, controls, maze. Reads and writes GameSettings, so it
 ## works the same from the main menu and the pause menu. Changes apply at once and are saved
-## when the page is left. The controller page opens inside it; `go_back()` steps out of
+## when the page is left. The controller page and the button map open inside it; `go_back()` steps out of
 ## whichever page is showing.
 
 signal back_pressed
@@ -16,6 +16,7 @@ var _rows: VBoxContainer
 var _scroll: ScrollContainer
 var _list: VBoxContainer
 var _controls: ControlsPage
+var _buttons: ButtonMap
 var _mode: OptionButton
 var _resolution: OptionButton
 var _vsync: CheckButton
@@ -71,14 +72,20 @@ func _ready() -> void:
 	_debug = _add_check("Show debug info", func(on: bool) -> void: _change(&"show_debug", on))
 	_map = _add_check("Show debug map (M)", func(on: bool) -> void: _change(&"show_map", on))
 	_rows.add_child(MenuTheme.button("Controllers...", func() -> void: _show_controls(true)))
+	_rows.add_child(MenuTheme.button("Button map...", func() -> void: _show_buttons(true)))
 	_rows.add_child(MenuTheme.button("Back", go_back))
 	_controls = ControlsPage.new()
 	_controls.visible = false
 	_controls.back_pressed.connect(func() -> void: _show_controls(false))
 	add_child(_controls)
+	_buttons = ButtonMap.new()
+	_buttons.visible = false
+	_buttons.back_pressed.connect(func() -> void: _show_buttons(false))
+	add_child(_buttons)
 	visibility_changed.connect(func() -> void:
 		if visible:
 			_show_controls(false)
+			_show_buttons(false)
 			refresh())
 	get_viewport().size_changed.connect(_fit_scroll)
 	refresh()
@@ -148,6 +155,9 @@ func go_back() -> void:
 	if _controls.visible:
 		_show_controls(false)
 		return
+	if _buttons.visible:
+		_show_buttons(false)
+		return
 	GameSettings.save_settings()
 	back_pressed.emit()
 
@@ -159,6 +169,13 @@ func _show_controls(shown: bool) -> void:
 		_controls.focus_first()
 	else:
 		focus_first()
+
+
+func _show_buttons(shown: bool) -> void:
+	_rows.visible = not shown
+	_buttons.visible = shown
+	if shown:
+		_buttons.focus_first()
 
 
 func _fill_resolutions() -> void:

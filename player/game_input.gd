@@ -19,7 +19,7 @@ const DEVICE_NONE := -3
 const DEFAULT_DEVICES := [DEVICE_KEYBOARD, DEVICE_ARROWS, 0, 1]
 ## Actions every slot has, each with the events that trigger it for each kind of device.
 const PER_SLOT := [
-	&"move_forward", &"move_back", &"move_left", &"move_right", &"sprint", &"interact", &"hold_flame", &"cycle_item",
+	&"move_forward", &"move_back", &"move_left", &"move_right", &"sprint", &"interact", &"hold_flame", &"cycle_item", &"use_item", &"drop_item",
 	&"camera_cycle", &"camera_top", &"camera_third", &"camera_first",
 	&"look_left", &"look_right", &"look_up", &"look_down",
 ]
@@ -31,13 +31,45 @@ const STICK_DEADZONE := 0.25
 
 const _WASD := {
 	&"move_forward": KEY_W, &"move_back": KEY_S, &"move_left": KEY_A, &"move_right": KEY_D,
-	&"sprint": KEY_SHIFT, &"interact": KEY_E, &"hold_flame": KEY_F, &"cycle_item": KEY_TAB,
+	&"sprint": KEY_SHIFT, &"interact": KEY_E, &"hold_flame": KEY_F, &"cycle_item": KEY_TAB, &"use_item": KEY_R, &"drop_item": KEY_Q,
 	&"camera_cycle": KEY_V, &"camera_top": KEY_1, &"camera_third": KEY_2, &"camera_first": KEY_3,
 }
 const _ARROWS := {
 	&"move_forward": KEY_UP, &"move_back": KEY_DOWN, &"move_left": KEY_LEFT, &"move_right": KEY_RIGHT,
-	&"sprint": KEY_CTRL, &"interact": KEY_ENTER, &"hold_flame": KEY_SLASH, &"cycle_item": KEY_PERIOD, &"camera_cycle": KEY_BACKSLASH,
+	&"sprint": KEY_CTRL, &"interact": KEY_ENTER, &"hold_flame": KEY_SLASH, &"cycle_item": KEY_PERIOD, &"use_item": KEY_COMMA, &"drop_item": KEY_SEMICOLON, &"camera_cycle": KEY_BACKSLASH,
 }
+
+## What each action is on a gamepad, for showing the player.
+const _PAD_NAMES := {
+	&"move_forward": "Left stick", &"move_back": "Left stick", &"move_left": "Left stick", &"move_right": "Left stick",
+	&"sprint": "RB / RT / stick click", &"interact": "A", &"hold_flame": "LB / LT", &"cycle_item": "D-pad left / right",
+	&"use_item": "X", &"drop_item": "B", &"camera_cycle": "Y",
+}
+
+
+## The controls for showing the player: [{action, what, keys (first keyboard, then mouse), arrows, pad}].
+static func keyboard_map() -> Array[Dictionary]:
+	var rows: Array[Dictionary] = []
+	var names := {
+		&"move_forward": "Move forward", &"move_back": "Move back", &"move_left": "Move left", &"move_right": "Move right",
+		&"sprint": "Sprint", &"interact": "Interact: take a key, light a candle", &"hold_flame": "Raise the flame / hold a key out",
+		&"cycle_item": "Switch item", &"use_item": "Use the item in hand", &"drop_item": "Drop the item in hand",
+		&"camera_cycle": "Change view", &"camera_top": "Top view", &"camera_third": "Third person", &"camera_first": "First person",
+	}
+	for base in names:
+		var keys: Array[String] = []
+		if _WASD.has(base):
+			keys.append(OS.get_keycode_string(_WASD[base]))
+		if base == &"hold_flame":
+			keys.append("Right mouse")
+		rows.append({"action": base, "what": names[base], "keys": keys, "arrows": OS.get_keycode_string(_ARROWS[base]) if _ARROWS.has(base) else "",
+				"pad": _PAD_NAMES.get(base, "")})
+	rows.insert(4, {"action": &"look", "what": "Look around", "keys": ["Mouse"], "arrows": "", "pad": "Right stick"})
+	rows.append({"action": &"zoom", "what": "Zoom the view", "keys": ["Mouse wheel"], "arrows": "", "pad": ""})
+	rows.append({"action": &"map", "what": "Debug map", "keys": ["M"], "arrows": "M", "pad": ""})
+	rows.append({"action": &"pause", "what": "Pause menu", "keys": ["Esc"], "arrows": "Esc", "pad": "Start"})
+	return rows
+
 
 static var _configured_for := 0
 static var _devices: Array = DEFAULT_DEVICES.duplicate()
@@ -136,6 +168,8 @@ static func _pad_events(base: StringName, device: int) -> Array[InputEvent]:
 		&"cycle_item":
 			events.append(_button(JOY_BUTTON_DPAD_RIGHT, device))
 			events.append(_button(JOY_BUTTON_DPAD_LEFT, device))
+		&"use_item": events.append(_button(JOY_BUTTON_X, device))
+		&"drop_item": events.append(_button(JOY_BUTTON_B, device))
 		&"camera_cycle": events.append(_button(JOY_BUTTON_Y, device))
 	return events
 

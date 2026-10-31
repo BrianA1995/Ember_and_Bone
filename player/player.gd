@@ -101,6 +101,8 @@ var _fall_speed := 0.0
 var _fall_time := 0.0
 var _unsupported_ticks := 0
 var _grace_left := 0.0
+## True while the player is busy with a menu (writing a message): the body stands still.
+var controls_locked := false
 ## How much a leech slows the body (a fraction of its speed) and for how long yet. Nothing is slowed
 ## unless time is left, so an unset value (0) can never stop a prisoner.
 var _slow_factor := 0.0
@@ -192,8 +194,8 @@ func warp_to(position: Vector3) -> void:
 # --- Walking ---------------------------------------------------------------------------
 
 func _walk(delta: float) -> void:
-	var input := Input.get_vector(GameInput.action(slot, &"move_left"), GameInput.action(slot, &"move_right"),
-			GameInput.action(slot, &"move_forward"), GameInput.action(slot, &"move_back"))
+	var input := Vector2.ZERO if controls_locked else Input.get_vector(GameInput.action(slot, &"move_left"),
+			GameInput.action(slot, &"move_right"), GameInput.action(slot, &"move_forward"), GameInput.action(slot, &"move_back"))
 	var sprinting := Input.is_action_pressed(GameInput.action(slot, &"sprint")) and not is_slowed()
 	var speed := (sprint_speed if sprinting else walk_speed) * speed_scale()
 	var facing := _rig.movement_basis if _rig else Basis.IDENTITY

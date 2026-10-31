@@ -11,11 +11,11 @@ extends Node
 signal placed(kind: StringName, cell: Vector2i)
 
 ## About how many rooms get built between one item and the next.
-@export_range(5, 300, 1) var rooms_per_item := 70
+@export_range(5, 300, 1) var rooms_per_item := 32
 ## How much of its stretch an item may land in, around the middle (0 exactly in the middle, 1 anywhere).
 @export_range(0.0, 1.0, 0.05) var spread := 0.6
 ## What each prisoner is dealt over a run, one card each.
-@export var per_prisoner: Array[StringName] = [&"matches", &"spare_candle", &"matches"]
+@export var per_prisoner: Array[StringName] = [&"matches", &"pouch", &"lamp", &"string", &"chalk", &"spare_candle", &"walkie", &"matches"]
 
 var bag: ItemBag
 ## The cards still to play: {at, kind}.
@@ -80,13 +80,14 @@ func _place(kind: StringName, cell: Vector2i) -> void:
 
 ## Lays `amount` of `kind` on the floor of `cell`'s room, at `where` (a world position; null for the
 ## middle). False if there is no room there.
-func _lay(kind: StringName, cell: Vector2i, where: Variant, amount: int) -> bool:
+func _lay(kind: StringName, cell: Vector2i, where: Variant, amount: int, delay := 0.0) -> bool:
 	var room := _manager.view.room_at(cell)
 	if room == null:
 		return false
 	var pickup := ItemPickup.new()
 	pickup.kind = kind
-	pickup.accepts = func(player: Player) -> bool: return bag.has_room(player.slot, kind)
+	pickup.delay = delay
+	pickup.accepts = func(player: Player) -> bool: return bag.has_room(player.slot, kind, amount)
 	pickup.taken.connect(func(player: Player) -> void:
 		_lying.erase(pickup)
 		bag.add(player.slot, kind, amount))
@@ -99,9 +100,11 @@ func _lay(kind: StringName, cell: Vector2i, where: Variant, amount: int) -> bool
 	return true
 
 
-## One `kind` dropped where a monster let it fall. If its room is gone it is dealt again instead.
-func drop(kind: StringName, cell: Vector2i, where: Vector3) -> void:
-	if not _lay(kind, cell, where, 1):
+## `amount` of `kind` dropped at `where` (by a monster, or a prisoner who put it down). If its room
+## is gone it is dealt again instead. Nobody can take it for a moment, so a prisoner who dropped it
+## does not pick it straight up again.
+func drop(kind: StringName, cell: Vector2i, where: Vector3, amount := 1) -> void:
+	if not _lay(kind, cell, where, amount, 1.2):
 		_redeal(kind)
 
 
