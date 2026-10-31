@@ -215,13 +215,13 @@ func _new_behaviour() -> void:
 	var leech := _spawn(&"leech", here) as Leech
 	_director.hit(leech, player)
 	_check("a leech snuffs the candle and clings", player.is_snuffed() and leech.is_clinging(), "")
-	_check("the prisoner walks slower", player.speed_scale < 1.0 and player.is_slowed(), "%.2f" % player.speed_scale)
+	_check("the prisoner walks slower", player.speed_scale() < 1.0 and player.is_slowed(), "%.2f" % player.speed_scale())
 	leech.slow_seconds = 0.5
 	leech._timer = 0.5
 	leech.set_physics_process(true)
 	player._slow_left = 0.5
 	await _wait(1.5)
-	_check("and when its time is up the prisoner is quick again", not player.is_slowed() and player.speed_scale == 1.0, "")
+	_check("and when its time is up the prisoner is quick again", not player.is_slowed() and player.speed_scale() == 1.0, "")
 	_check("the leech fades away", not is_instance_valid(leech), "")
 	player.relight()
 	_director._immune.clear()
