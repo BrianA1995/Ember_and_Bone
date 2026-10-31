@@ -20,6 +20,8 @@ func _ready() -> void:
 	await _thief()
 	await _crawler_and_moth()
 	await _weaver()
+	_no_way()
+	await _chase()
 	await _warden()
 	await _falling_and_immunity()
 	await _spawning()
@@ -131,6 +133,44 @@ func _crawler_and_moth() -> void:
 	moth.queue_free()
 	player.relight()
 	_director._immune.clear()
+
+
+func _chase() -> void:
+	print("-- chasing round corners")
+	var player := _game.players[0]
+	player.reset_position()
+	player.relight()
+	await _wait(1.0)
+	_director._immune.clear()
+	var here := _director.cell_at(player.global_position)
+	var found := _director.reachable(here, 4)
+	var far := here
+	for cell in found:
+		if found[cell].steps > found[far].steps and found[cell].steps >= 2:
+			far = cell
+	_check("there is a room a few doorways away to chase from", far != here, "")
+	_escape.keys_held[0] = 1
+	var thief := _director.spawn(&"thief", far) as Thief
+	await _wait(0.1)
+	var waited := 0.0
+	while waited < 15.0 and not thief._carrying:
+		await _wait(0.25)
+		waited += 0.25
+	_check("a thief walks the doorways to the prisoner and takes the key", thief._carrying, "%d doorways, waited %.1f s" % [found[far].steps, waited])
+	thief.queue_free()
+	_escape.keys_held[0] = 0
+	player.relight()
+	_director._immune.clear()
+
+
+func _no_way() -> void:
+	print("-- no way through")
+	var player := _game.players[0]
+	var here := _director.cell_at(player.global_position)
+	var far := player.global_position + Vector3(60.0, 0.0, 0.0)
+	_check("a target in rooms that do not exist has no path", _director.next_step(here, _director.cell_at(far)) == null, "")
+	var step: Variant = _director.closest_step(here, far)
+	_check("but a monster still steps toward it, as near as the rooms allow", step != null or _director.reachable(here, 14).size() == 1, "%s" % [step])
 
 
 func _weaver() -> void:

@@ -271,6 +271,21 @@ func next_step(from: Vector2i, to: Vector2i, depth := 14, through_webs := false)
 	return found[to].first if found.has(to) else null
 
 
+## When `next_step` finds no way (the target is behind a wall, or in rooms that do not exist): the
+## room to step into to get as near as the rooms that exist allow to the point `target`. Null when
+## `from` is already the nearest.
+func closest_step(from: Vector2i, target: Vector3, depth := 14, through_webs := false) -> Variant:
+	var found := reachable(from, depth, through_webs)
+	var best: Vector2i = from
+	var best_distance := offset(RoomDefs.cell_to_world(from), target).length()
+	for cell in found:
+		var distance := offset(RoomDefs.cell_to_world(cell), target).length()
+		if distance < best_distance - 0.1:
+			best_distance = distance
+			best = cell
+	return null if best == from else found[best].first
+
+
 ## The room to step into to get from `from` away from the points in `threats`: the reachable room
 ## (within `depth` steps) farthest from the nearest of them. Null if there is nowhere to go.
 func step_away(from: Vector2i, threats: Array[Vector2i], depth := 8, through_webs := false) -> Variant:

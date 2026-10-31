@@ -45,6 +45,7 @@ var _pause_left := 0.0
 var _falling := false
 var _replan := 0.0
 var _planned_in := Vector2i(-9999, -9999)
+var _centred_in := Vector2i(-9999, -9999)
 var _step: Variant = null
 var _wander_left := 0.0
 var _wander_goal := Vector2i.ZERO
@@ -162,10 +163,19 @@ func go_to(goal_cell: Vector2i, goal_position: Vector3, speed: float, delta: flo
 		_replan = 0.3
 		_planned_in = cell
 		_step = director.next_step(cell, goal_cell, path_depth, crosses_webs)
+		if _step == null:
+			# No way there through the rooms that exist: get as near as they allow.
+			_step = director.closest_step(cell, goal_position, path_depth, crosses_webs)
 	if _step == null:
+		# Already as near as it can get; stroll rather than stand against the wall.
+		wander(speed * 0.6, delta)
 		return false
 	var middle := RoomDefs.cell_to_world(cell)
-	if director.offset(global_position, middle).length() > 0.5:
+	if director.offset(global_position, middle).length() < 0.15:
+		_centred_in = cell
+	# Once at the middle of a room it heads on for good (until it is in the next one), or it would
+	# step off the middle, be told to go back, and shuffle there for ever.
+	if _centred_in != cell:
 		move_toward_point(middle, speed, delta)
 	else:
 		move_toward_point(RoomDefs.cell_to_world(_step), speed, delta)
