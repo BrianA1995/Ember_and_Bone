@@ -52,6 +52,8 @@ var game_mode := GameMode.FREEPLAY
 var tag_points := 100
 ## Escape: the last gate left stays up for a while after its light goes (see EscapeRun.last_gate_grace).
 var gate_grace := false
+## Whether an escape run has monsters. Not saved; off in a headless run so tests stay quiet unless they ask.
+var monsters := DisplayServer.get_name() != "headless"
 ## The debug map of the whole maze (M toggles it).
 var show_map := false
 ## What each player (slot 0-3) plays with: GameInput.DEVICE_KEYBOARD, DEVICE_ARROWS, DEVICE_NONE,

@@ -84,6 +84,8 @@ var _carriers: Array[KeyCarrier] = []
 var _sight: DarkSight
 ## key alcove cell -> its KeyPickup, while the key lies there.
 var _pickups: Dictionary = {}
+## KeyPickup -> the cell it lies in, for keys a monster let fall (not in an alcove).
+var _loose: Dictionary = {}
 ## gate anchor cell -> true, and every cell of a standing gate -> its anchor.
 var _gates: Dictionary = {}
 var _gate_cells: Dictionary = {}
@@ -159,6 +161,7 @@ func restart() -> void:
 	finished = false
 	unlock_progress = 0.0
 	_pickups.clear()
+	_loose.clear()
 	_gates.clear()
 	_gate_cells.clear()
 	_seen.clear()
@@ -203,6 +206,8 @@ func gate_status(slot: int) -> String:
 ## What player `slot` can do right now, as a hint ("" for nothing).
 func prompt(slot: int) -> String:
 	var player := players[slot]
+	if player.is_snuffed():
+		return "Your candle is out: hold %s beside a lit candle" % _button_name(slot, &"interact")
 	if keys_held[slot] < capacity() and _offerer_near(player) != null:
 		return "%s: take the key" % _button_name(slot, &"interact")
 	if players.size() > 1 and equipped[slot] > 0:
@@ -288,6 +293,12 @@ func _on_cell_added(cell: Vector2i) -> void:
 
 
 func _on_cell_removed(cell: Vector2i) -> void:
+	for loose in _loose.keys():
+		if _loose[loose] == cell:
+			_loose.erase(loose)
+			# A key a monster dropped in a room that went dark is not lost: it turns up again later.
+			if is_instance_valid(loose) and not loose.is_queued_for_deletion():
+				key_returned()
 	if _pickups.has(cell):
 		var pickup = _pickups[cell]
 		_pickups.erase(cell)
@@ -317,6 +328,44 @@ func _on_cell_removed(cell: Vector2i) -> void:
 			if _unlocking == anchor:
 				unlock_progress = 0.0
 			_check_lost()
+
+
+## The anchor cells of the gates standing now.
+func gate_anchors() -> Array:
+	return _gates.keys()
+
+
+## A monster takes a key from `player` (false if they have none). The key is no longer collected.
+func take_key_from(player: Player) -> bool:
+	if keys_held[player.slot] <= 0:
+		return false
+	keys_held[player.slot] -= 1
+	keys_collected -= 1
+	return true
+
+
+## A key lies loose at `position` in `cell`'s room, dropped by a monster. Anyone with a free hand can take it.
+func drop_key(position: Vector3, cell: Vector2i) -> void:
+	var room := _manager.view.room_at(cell)
+	if room == null:
+		key_returned()
+		return
+	var pickup := KeyPickup.new()
+	pickup.accepts = func(player: Player) -> bool: return keys_held[player.slot] < capacity()
+	pickup.taken.connect(func(player: Player) -> void:
+		_loose.erase(pickup)
+		keys_held[player.slot] += 1
+		keys_collected += 1)
+	room.add_child(pickup)
+	pickup.global_position = Vector3(position.x, 1.0, position.z)
+	_loose[pickup] = cell
+
+
+## A key a monster took has gone from the maze for now: another alcove is dealt for it a little later.
+func key_returned() -> void:
+	keys_placed -= 1
+	_redeal(&"key")
+	_update_weights()
 
 
 func _someone_in_the_dark() -> bool:
@@ -502,5 +551,5 @@ func _refresh() -> void:
 		equipped[slot] = mini(equipped[slot], keys_held[slot])
 		players[slot].set_candle_lit(equipped[slot] == 0)
 		_carriers[slot].set_state(keys_held[slot], equipped[slot] > 0)
-		_huds[slot].show_inventory(keys_held[slot], capacity(), equipped[slot], equipped[slot] == 0)
+		_huds[slot].show_inventory(keys_held[slot], capacity(), equipped[slot], players[slot].is_candle_lit())
 		_huds[slot].show_state(keys_held[slot], keys_per_prisoner, carrying, at_gate_needed, gate_status(slot), prompt(slot))

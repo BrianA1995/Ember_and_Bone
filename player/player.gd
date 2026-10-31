@@ -11,6 +11,9 @@ extends CharacterBody3D
 
 ## The body has dropped out of sight through a pit.
 signal fell
+## The candle was snuffed out (by a monster), and was lit again.
+signal snuffed
+signal relit
 
 ## Which local player this is (0-3). Picks the input actions (see GameInput) and the body colour.
 @export var slot := 0
@@ -98,6 +101,8 @@ var _fall_speed := 0.0
 var _fall_time := 0.0
 var _unsupported_ticks := 0
 var _grace_left := 0.0
+## True from the moment a monster snuffs the candle until it is lit again (see relight).
+var _snuffed := false
 
 @onready var _visual: Node3D = $Visual
 @onready var _candle: Candle = $Candle
@@ -300,6 +305,7 @@ func flame_lean() -> float:
 ## Lights the candle, or puts it away (or snuffs it). Without it nothing but the room the player
 ## stands in exists around them (the maze reads light_radius 0), and they see it only by a dim grey light.
 func set_candle_lit(on: bool) -> void:
+	on = on and not _snuffed
 	if on == _candle.lit:
 		return
 	_candle.set_lit(on)
@@ -310,6 +316,42 @@ func set_candle_lit(on: bool) -> void:
 
 func is_candle_lit() -> bool:
 	return _candle.lit
+
+
+## A monster puts the candle out. It stays out, whatever the player does with it, until relight().
+func snuff() -> void:
+	if _snuffed:
+		return
+	_snuffed = true
+	set_candle_lit(false)
+	snuffed.emit()
+
+
+## The candle may burn again (whoever decides what is in hand lights it: see EscapeRun).
+func relight() -> void:
+	if not _snuffed:
+		return
+	_snuffed = false
+	relit.emit()
+
+
+func is_snuffed() -> bool:
+	return _snuffed
+
+
+## Is the flame held up in front of the face (the hold-flame button is down and the candle burns)?
+func flame_raised() -> bool:
+	return _raise > 0.8 and _candle.lit
+
+
+## The way the body faces, on the floor plane (the candle is held out that way).
+func facing() -> Vector3:
+	return Basis(Vector3.UP, _visual.rotation.y) * Vector3(0.0, 0.0, -1.0)
+
+
+## How fast the body moves over the floor, in m/s.
+func floor_speed() -> float:
+	return Vector2(velocity.x, velocity.z).length()
 
 
 ## Where the flame is, and how far its light reaches, in metres.

@@ -130,6 +130,20 @@ func _add_escape() -> void:
 		_show_run_results("You escaped", ", ".join(names) + " got out.", escape))
 	escape.run_lost.connect(func(reason: String) -> void:
 		_show_run_results("The Cage keeps you", reason, escape))
+	if GameSettings.monsters:
+		_add_monsters()
+
+
+## The monsters, and the ways to get a snuffed candle lit again.
+func _add_monsters() -> void:
+	var director := MonsterDirector.new()
+	director.name = "MonsterDirector"
+	add_child(director)
+	director.setup(players, $MazeManager as MazeManager, escape)
+	var relighting := Relighting.new()
+	relighting.name = "Relighting"
+	add_child(relighting)
+	relighting.setup(players)
 
 
 func _show_run_results(title: String, reason: String, run: EscapeRun) -> void:
