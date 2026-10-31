@@ -10,18 +10,32 @@ extends Node
 ## (Monster.on_hit). Nothing here kills anyone. Monsters live only in rooms that exist: when the room
 ## under one goes dark it falls, and the Director sends another a little later.
 ##
-## Pressure: after `grace_seconds` one monster is added every `spawn_interval` until the limit is
-## reached; the limit grows with the players and with the keys the team has taken. Monsters are
-## placed in the dark ring, where the player cannot see a room being built.
+## Pressure: a tension (0 to 1) decides how many monsters there should be, as a share of the limit
+## (which grows with the players and with the keys the team has taken). Tension rises as the run goes
+## on and with every key taken, and drops after a prisoner is hit, so there are lulls. After
+## `grace_seconds` the director looks every `spawn_interval`, and if there are fewer monsters than
+## tension asks for it adds one, in the dark ring (where a room being built cannot be seen) and
+## preferably ahead of the way a prisoner is heading, so they run into it instead of leaving it
+## behind. It owns the monsters only; items and keys have their own systems.
 
 signal player_hit(monster: Monster, player: Player)
 
 @export var enabled := true
 @export_group("Pressure")
 ## Seconds after the run starts before the first monster.
-@export_range(0.0, 120.0, 1.0, "suffix:s") var grace_seconds := 20.0
+@export_range(0.0, 120.0, 1.0, "suffix:s") var grace_seconds := 10.0
 ## Seconds between one monster being added and the next.
-@export_range(1.0, 60.0, 0.5, "suffix:s") var spawn_interval := 8.0
+@export_range(1.0, 60.0, 0.5, "suffix:s") var spawn_interval := 4.0
+@export_group("Tension")
+## Tension at the start of a run. At least one monster is always wanted after the grace period.
+@export_range(0.0, 1.0, 0.05) var tension_start := 0.34
+## How much it rises each minute, and for every key the team takes.
+@export_range(0.0, 1.0, 0.05) var tension_per_minute := 0.2
+@export_range(0.0, 0.5, 0.05) var tension_per_key := 0.1
+## How much it drops when a prisoner is hit: a breather.
+@export_range(0.0, 1.0, 0.05) var hit_relief := 0.4
+## A new monster is placed this much more readily in the rooms a prisoner is heading toward (0 is anywhere).
+@export_range(0.0, 10.0, 0.5) var ahead_bias := 3.0
 ## How many monsters at once, by number of players ({up_to, max}); every two keys taken add one.
 @export var limits: Array[Dictionary] = [{"up_to": 1, "max": 3}, {"up_to": 4, "max": 5}, {"up_to": 8, "max": 9}]
 ## How close, in cells, a new monster may be placed to a prisoner. Rooms nearer than 2 are in the light.
@@ -49,6 +63,9 @@ var elapsed := 0.0
 ## For anything a monster decides by chance, so a maze's monsters repeat for the same seed.
 var rng := RandomNumberGenerator.new()
 var _spawn_timer := 0.0
+## 0 to 1: how many of the most monsters the director wants right now.
+var tension := 0.0
+var _keys_seen := 0
 ## What each prisoner can see now, as sets of cells: the rooms their candle lights, or only their own room without it.
 var _view: Dictionary = {}
 var _immune: Dictionary = {}
@@ -85,6 +102,8 @@ func _on_maze_rebuilt() -> void:
 	grid.cell_removed.connect(_on_cell_removed)
 	rng.seed = grid.seed_value + 77
 	elapsed = 0.0
+	tension = tension_start
+	_keys_seen = 0
 	_spawn_timer = grace_seconds
 
 
@@ -93,6 +112,7 @@ func _physics_process(delta: float) -> void:
 		return
 	elapsed += delta
 	_update_view()
+	_update_tension(delta)
 	for player in _immune.keys():
 		_immune[player] -= delta
 		if _immune[player] <= 0.0:
@@ -108,7 +128,7 @@ func _physics_process(delta: float) -> void:
 	_spawn_timer = spawn_interval
 	_spawn_wardens()
 	_spawn_mimic()
-	if monsters.size() < limit():
+	if monsters.size() < wanted():
 		_spawn_random()
 
 
@@ -124,6 +144,19 @@ func _update_view() -> void:
 ## monster next door does not come for them until they walk into its room.
 func can_chase(player: Player, monster_cell: Vector2i) -> bool:
 	return player.is_candle_lit() or _view.get(player, {}).has(monster_cell)
+
+
+## Tension rises with time and with each key the team takes.
+func _update_tension(delta: float) -> void:
+	tension = minf(tension + tension_per_minute / 60.0 * delta, 1.0)
+	if run != null and run.keys_collected > _keys_seen:
+		tension = minf(tension + tension_per_key * (run.keys_collected - _keys_seen), 1.0)
+	_keys_seen = run.keys_collected if run != null else 0
+
+
+## How many monsters the director wants now: the tension's share of the limit, and at least one.
+func wanted() -> int:
+	return clampi(roundi(tension * limit()), 1, limit())
 
 
 ## How many monsters there may be at once now.
@@ -174,12 +207,44 @@ func _spawn_random() -> void:
 		return
 	for attempt in 8:
 		var kind: StringName = _pick_kind(kinds)
-		var cell: Vector2i = cells[rng.randi() % cells.size()]
+		var cell := _pick_cell(cells)
 		var monster := spawn(kind, cell)
 		if monster.suits(cell):
 			return
 		monsters.erase(monster)
 		monster.queue_free()
+
+
+## One of `cells`, chosen at random but more often the ones in the direction a prisoner is heading.
+func _pick_cell(cells: Array[Vector2i]) -> Vector2i:
+	var scores: Array[float] = []
+	var total := 0.0
+	for cell in cells:
+		var score := 1.0 + ahead_bias * _ahead(cell)
+		scores.append(score)
+		total += score
+	var roll := rng.randf() * total
+	for i in cells.size():
+		roll -= scores[i]
+		if roll <= 0.0:
+			return cells[i]
+	return cells[-1]
+
+
+## 0 to 1: how much `cell` lies in the way the nearest prisoner is heading (their walk, or the way they face).
+func _ahead(cell: Vector2i) -> float:
+	var best := 0.0
+	var best_distance := INF
+	for player in players:
+		var to := offset(player.global_position, RoomDefs.cell_to_world(cell))
+		if to.length() >= best_distance:
+			continue
+		best_distance = to.length()
+		var heading := Vector3(player.velocity.x, 0.0, player.velocity.z)
+		if heading.length() < 0.5:
+			heading = player.facing()
+		best = maxf(heading.normalized().dot(to.normalized()), 0.0)
+	return best
 
 
 func _pick_kind(kinds: Array) -> StringName:
@@ -378,6 +443,7 @@ func hit(monster: Monster, player: Player) -> bool:
 	if not can_hit(player):
 		return false
 	_immune[player] = hit_immunity
+	tension = maxf(tension - hit_relief, 0.0)
 	if monster.snuffs_candle:
 		player.snuff()
 	player_hit.emit(monster, player)

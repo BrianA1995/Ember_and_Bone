@@ -47,7 +47,7 @@ func _ready() -> void:
 			Input.action_press(GameInput.action(0, moves[rng.randi() % 4]))
 		if int(t * 60.0) % 600 == 0:
 			var cells := director._spawn_cells()
-			print("t=%3.0f s  rooms %d  spawn cells %d  monsters %d / limit %d" % [t, director.grid.cell_count(), cells.size(), director.monsters.size(), director.limit()])
+			print("t=%3.0f s  rooms %d  spawn cells %d  monsters %d / wanted %d (tension %.2f) / limit %d" % [t, director.grid.cell_count(), cells.size(), director.monsters.size(), director.wanted(), director.tension, director.limit()])
 		for monster in director.monsters:
 			if not log.has(monster):
 				log[monster] = {"kind": monster.get_script().get_global_name(), "born": t, "last": t, "closest": INF}
