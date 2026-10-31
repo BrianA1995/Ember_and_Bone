@@ -1,18 +1,23 @@
 class_name Lurker
 extends Monster
-## Waits in a corridor and does nothing until a lit prisoner MOVES in its line. Then a red streak
-## shows along the floor, and a moment later it charges: every prisoner standing in that straight
-## line, however far apart, is hit at once. Only open space counts as a line: a wall breaks it. A
-## prisoner who stands still when they see it is not attacked, and one who steps out of the streak, or
-## round a corner, before it charges is not hit.
+## Creeps up on the nearest prisoner, silently, and gives nothing away. It reacts to movement: when a
+## lit prisoner MOVES in a straight open line from it, it freezes and counts `grace_seconds`; if the
+## prisoner is still moving when that runs out it charges, and everyone standing in that line, however
+## far apart, is hit at once. A prisoner who stops moving within the grace period is left alone, and a
+## still prisoner is never attacked, however close it creeps. Only open space counts as a line: a
+## wall breaks it.
 ##
-## Tell: the red streak (the charge lane). Survive: leave the line, or keep still.
+## Survive: freeze when you see it, put the candle away, or break the line round a corner.
 
 @export_group("Lurker")
+## How fast it creeps toward a prisoner.
+@export var creep_speed := 1.3
+## How far, in rooms, it can sense a prisoner to creep toward.
+@export_range(1, 12) var sense_cells := 6
 ## The longest line, in rooms, it can strike along.
 @export_range(1, 10) var longest_lane := 5
-## Seconds between the streak showing and the charge.
-@export_range(0.2, 3.0, 0.05, "suffix:s") var windup := 1.2
+## Seconds a prisoner in its line has to stop moving before it charges.
+@export_range(0.2, 5.0, 0.1, "suffix:s") var grace_seconds := 1.5
 @export var charge_speed := 14.0
 ## How far to either side of the line's middle, in metres, a prisoner is still in it.
 @export var lane_half_width := 1.3
@@ -20,25 +25,21 @@ extends Monster
 @export_range(0.0, 20.0, 0.5, "suffix:s") var rest_seconds := 6.0
 ## A prisoner moving slower than this (m/s) counts as standing still.
 @export var moving_speed := 0.8
+## How close, in metres, it creeps up to a prisoner and then stands.
+@export var stand_off := 1.4
 
-enum State { WAIT, WINDUP, CHARGE, REST }
+enum State { STALK, CHARGE, REST }
 
-var _state := State.WAIT
+var _state := State.STALK
 var _timer := 0.0
+var _grace := 0.0
 var _side := 0
 var _goal := Vector3.ZERO
-var _streak: MeshInstance3D
 
 
 func _init() -> void:
 	hits_on_touch = false
-
-
-func _ready() -> void:
-	super()
-	_streak = part(box(Vector3(0.7, 0.03, 1.0)), Color(0.9, 0.05, 0.03), Vector3.ZERO, 2.0)
-	_streak.visible = false
-	add_child(_streak)
+	move_speed = creep_speed
 
 
 func build_model() -> Node3D:
@@ -54,62 +55,57 @@ func build_model() -> Node3D:
 	return body
 
 
-## A place with a straight run of at least two rooms to strike along.
-func suits(at: Vector2i) -> bool:
-	for side in RoomDefs.SIDE_COUNT:
-		if director.lane(at, side, 3).size() >= 2:
-			return true
-	return false
-
-
 func _act(delta: float) -> void:
 	match _state:
-		State.WAIT:
-			_watch()
-		State.WINDUP:
-			_timer -= delta
-			if _timer <= 0.0:
-				_strike()
+		State.STALK:
+			_stalk(delta)
 		State.CHARGE:
 			if move_toward_point(_goal, charge_speed, delta):
 				_rest(rest_seconds)
 		State.REST:
 			_timer -= delta
 			if _timer <= 0.0:
-				_state = State.WAIT
+				_state = State.STALK
 
 
 func on_stunned() -> void:
+	_grace = grace_seconds
 	_rest(rest_seconds * 0.5)
 
 
-## Something moving in a lane it can strike along, with a lit candle: start the windup.
-func _watch() -> void:
+## Creeps toward the nearest prisoner; while one moves in its line it stands still and counts down.
+func _stalk(delta: float) -> void:
+	var side := _mover_in_line()
+	if side >= 0:
+		_side = side
+		_grace -= delta
+		if _grace <= 0.0:
+			_strike()
+		return
+	_grace = grace_seconds
+	var target := nearest_player(func(player: Player) -> bool:
+		return director.offset(global_position, player.global_position).length() <= sense_cells * RoomDefs.CELL_SIZE)
+	if target == null:
+		wander(creep_speed * 0.6, delta)
+	elif director.offset(global_position, target.global_position).length() > stand_off:
+		go_to(director.cell_at(target.global_position), target.global_position, creep_speed, delta)
+
+
+## The side of a line a lit prisoner is moving in, or -1.
+func _mover_in_line() -> int:
 	for side in RoomDefs.SIDE_COUNT:
 		var rooms := director.lane(cell, side, longest_lane)
-		if rooms.is_empty():
-			continue
 		for player in director.players:
 			if player.is_candle_lit() and player.floor_speed() > moving_speed and _in_lane(player, side, rooms):
-				_begin(side, rooms)
-				return
-
-
-func _begin(side: int, rooms: Array[Vector2i]) -> void:
-	_state = State.WINDUP
-	_timer = windup
-	_side = side
-	var direction := Vector3(RoomDefs.DIRS[side].x, 0.0, RoomDefs.DIRS[side].y)
-	rotation.y = atan2(-direction.x, -direction.z)
-	var length := rooms.size() * RoomDefs.CELL_SIZE + RoomDefs.CELL_SIZE * 0.5
-	(_streak.mesh as BoxMesh).size.z = length
-	_streak.position = Vector3(0.0, 0.03, -length * 0.5)
-	_streak.visible = true
+				return side
+	return -1
 
 
 ## Everyone in the line now is hit, then it charges to the far end.
 func _strike() -> void:
 	var rooms := director.lane(cell, _side, longest_lane)
+	var direction := Vector3(RoomDefs.DIRS[_side].x, 0.0, RoomDefs.DIRS[_side].y)
+	rotation.y = atan2(-direction.x, -direction.z)
 	for player in director.players:
 		if _in_lane(player, _side, rooms):
 			director.hit(self, player)
@@ -118,18 +114,17 @@ func _strike() -> void:
 		return
 	_goal = RoomDefs.cell_to_world(rooms[-1])
 	_state = State.CHARGE
-	_streak.visible = false
 
 
 func _rest(seconds: float) -> void:
 	_state = State.REST
 	_timer = seconds
-	_streak.visible = false
 
 
 ## Is `player` in the line from this room out through `side` (the rooms in `rooms`), near its middle?
 func _in_lane(player: Player, side: int, rooms: Array[Vector2i]) -> bool:
-	if cell != director.cell_at(player.global_position) and not rooms.has(director.cell_at(player.global_position)):
+	var there := director.cell_at(player.global_position)
+	if cell != there and not rooms.has(there):
 		return false
 	var to := director.offset(global_position, player.global_position)
 	var direction := Vector3(RoomDefs.DIRS[side].x, 0.0, RoomDefs.DIRS[side].y)

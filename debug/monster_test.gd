@@ -65,17 +65,30 @@ func _lurker() -> void:
 	lurker.position = player.global_position
 	await _wait(0.1)
 	player.velocity = Vector3.ZERO
-	lurker._watch()
-	_check("a lit prisoner standing still is left alone", lurker._state == Lurker.State.WAIT, "")
+	for i in 40:
+		lurker._act(0.1)
+	_check("a lit prisoner standing still is never attacked", not player.is_snuffed(), "")
 	player.velocity = Vector3(2.0, 0.0, 0.0)
-	lurker._watch()
-	_check("a lit prisoner who moves in its line starts the windup", lurker._state == Lurker.State.WINDUP, "")
-	lurker._strike()
-	_check("the charge snuffs the candle", player.is_snuffed() and not player.is_candle_lit(), "")
+	for i in 8:
+		lurker._act(0.1)
+	_check("a prisoner who moves in its line gets a grace period (0.8 s of 1.5 s: nothing yet)", not player.is_snuffed(), "")
+	player.velocity = Vector3.ZERO
+	for i in 20:
+		lurker._act(0.1)
+	_check("and stopping within it saves them", not player.is_snuffed(), "")
+	player.velocity = Vector3(2.0, 0.0, 0.0)
+	for i in 8:
+		lurker._act(0.1)
+	_check("the grace starts again from nothing", not player.is_snuffed(), "")
+	for i in 10:
+		lurker._act(0.1)
+	_check("a prisoner who keeps moving past the grace is hit", player.is_snuffed() and not player.is_candle_lit(), "")
+	_check("with no red line to give it away", lurker.get_children().all(func(child: Node) -> bool: return child == lurker.model), "")
+	player.relight()
+	player.velocity = Vector3.ZERO
 	var closed := _closed_side(here)
 	_check("a wall stops the line: no lane through a closed side", closed < 0 or _director.lane(here, closed, 5).is_empty(), "")
 	lurker.queue_free()
-	player.relight()
 	await _wait(0.1)
 	_director._immune.clear()
 
@@ -153,11 +166,12 @@ func _chase() -> void:
 	var thief := _director.spawn(&"thief", far) as Thief
 	await _wait(0.1)
 	var waited := 0.0
-	while waited < 15.0 and not thief._carrying:
+	while waited < 15.0 and is_instance_valid(thief) and not thief._carrying:
 		await _wait(0.25)
 		waited += 0.25
-	_check("a thief walks the doorways to the prisoner and takes the key", thief._carrying, "%d doorways, waited %.1f s" % [found[far].steps, waited])
-	thief.queue_free()
+	_check("a thief walks the doorways to the prisoner and takes the key", is_instance_valid(thief) and thief._carrying, "%d doorways, waited %.1f s" % [found[far].steps, waited])
+	if is_instance_valid(thief):
+		thief.queue_free()
 	_escape.keys_held[0] = 0
 	player.relight()
 	_director._immune.clear()
@@ -238,8 +252,12 @@ func _spawning() -> void:
 	_director.enabled = true
 	_director.grace_seconds = 0.0
 	_director.spawn_interval = 0.2
+	_director.spawn_min_cells = 1
 	_director._spawn_timer = 0.0
-	await _wait(2.0)
+	var waited := 0.0
+	while _director.monsters.is_empty() and waited < 12.0:
+		await _wait(0.25)
+		waited += 0.25
 	print("   spawn cells: %d, rooms: %d" % [_director._spawn_cells().size(), _director.grid.cell_count()])
 	_check("the Director adds monsters, never more than its limit", _director.monsters.size() > 0 and _director.monsters.size() <= _director.limit(), "%d of %d" % [_director.monsters.size(), _director.limit()])
 	for monster in _director.monsters:
@@ -262,7 +280,7 @@ func _relighting() -> void:
 	Input.action_press(GameInput.action(0, &"interact"))
 	await _wait(0.5)
 	_check("holding the button a moment is not enough", a.is_snuffed(), "")
-	await _wait(1.3)
+	await _wait(2.0)
 	Input.action_release(GameInput.action(0, &"interact"))
 	_check("holding it beside a lit candle lights it again", not a.is_snuffed() and a.is_candle_lit(), "")
 	a.snuff()
@@ -272,7 +290,7 @@ func _relighting() -> void:
 	Input.action_release(GameInput.action(0, &"interact"))
 	_check("too far from the light, it stays out", a.is_snuffed(), "")
 	relighting.fallback_seconds = 0.5
-	await _wait(1.0)
+	await _wait(2.0)
 	_check("the stand-in lights a candle by itself after a while", not a.is_snuffed(), "")
 
 

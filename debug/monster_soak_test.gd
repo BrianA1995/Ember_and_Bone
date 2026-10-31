@@ -28,6 +28,10 @@ func _ready() -> void:
 		var name: String = monster.get_script().get_global_name()
 		hits[name] = hits.get(name, 0) + 1)
 	var seen := {}
+	var last_at := {}
+	var walked := {}
+	var ticks := {}
+	var still := {}
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 5
 	var heading := 0
@@ -53,8 +57,18 @@ func _ready() -> void:
 		stats.rooms = maxi(stats.rooms, director.grid.cell_count())
 		stats.far = maxf(stats.far, player.global_position.length())
 		for monster in director.monsters:
-			seen[monster.get_script().get_global_name()] = true
+			var kind: String = monster.get_script().get_global_name()
+			seen[kind] = true
+			var last: Vector3 = last_at.get(monster, monster.global_position)
+			var moved := monster.global_position.distance_to(last)
+			last_at[monster] = monster.global_position
+			if moved < 1.0:
+				walked[kind] = walked.get(kind, 0.0) + (moved if moved < 1.0 else 0.0)
+			ticks[kind] = ticks.get(kind, 0) + 1
+			still[kind] = still.get(kind, 0) + (1 if moved < 0.0005 and not monster.is_stunned() else 0)
 	print("monsters seen: %s" % [seen.keys()])
 	print("hits by kind: %s, candle snuffed %d times (%.0f s in the dark), %d monsters at the end, most rooms at once %d, furthest from start %.0f m" % [hits, stats.snuffs, stats.dark, director.monsters.size(), stats.rooms, stats.far])
+	for kind in ticks:
+		print("   %s: walked %.0f m over %.0f s, stood still %.0f%% of the time" % [kind, walked[kind], ticks[kind] / 60.0, 100.0 * still.get(kind, 0) / ticks[kind]])
 	print("MONSTER SOAK: PASS")
 	get_tree().quit(0)
