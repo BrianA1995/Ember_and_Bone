@@ -1,7 +1,7 @@
 class_name Thief
 extends Monster
-## Hunts a prisoner who carries something: a key, matches, a spare candle. A touch snuffs their candle
-## and takes one thing, chosen at random from what they carry; it runs off with it. A flame held up at
+## Hunts a prisoner who carries something: a key, matches, a spare candle. A touch (it leaves the
+## candle burning) takes one thing, chosen at random from what they carry; it runs off with it. A flame held up at
 ## it makes it drop the thing where it stands (and it bolts); if it gets away with it, or fades out with
 ## its room, the thing goes back into the maze and turns up again later. With nobody carrying anything
 ## it only wanders.
@@ -28,6 +28,7 @@ var _away_timer := 0.0
 
 func _init() -> void:
 	move_speed = 2.0
+	snuffs_candle = false
 
 
 func build_model() -> Node3D:

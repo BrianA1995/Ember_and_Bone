@@ -361,7 +361,8 @@ func hit(monster: Monster, player: Player) -> bool:
 	if not can_hit(player):
 		return false
 	_immune[player] = hit_immunity
-	player.snuff()
+	if monster.snuffs_candle:
+		player.snuff()
 	player_hit.emit(monster, player)
 	monster.on_hit(player)
 	return true

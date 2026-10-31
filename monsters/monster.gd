@@ -19,6 +19,8 @@ extends Node3D
 ## How close, in metres, it must get to a prisoner to hit them by touching.
 @export var reach := 0.9
 @export var hits_on_touch := true
+## Whether a hit puts the prisoner's candle out (a Thief only steals).
+@export var snuffs_candle := true
 ## How many rooms ahead it plans a walk.
 @export var path_depth := 14
 ## Whether a web across a doorway stops it.
