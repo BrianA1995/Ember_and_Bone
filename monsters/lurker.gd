@@ -62,13 +62,16 @@ func _init() -> void:
 func build_model() -> Node3D:
 	var body := Node3D.new()
 	var dark := Color(0.08, 0.07, 0.09)
-	body.add_child(part(CapsuleMesh.new(), dark, Vector3(0.0, 0.95, 0.0)))
+	var torso := CapsuleMesh.new()
+	torso.height = 1.6
+	body.add_child(part(torso, dark, Vector3(0.0, 0.8, 0.0)))
 	(body.get_child(0) as MeshInstance3D).scale = Vector3(0.6, 1.0, 0.6)
 	body.add_child(part(box(Vector3(0.1, 1.1, 0.1)), dark, Vector3(-0.38, 0.75, 0.0)))
 	body.add_child(part(box(Vector3(0.1, 1.1, 0.1)), dark, Vector3(0.38, 0.75, 0.0)))
-	body.add_child(part(ball(0.17), Color(0.75, 0.72, 0.66), Vector3(0.0, 1.85, 0.0)))
-	body.add_child(part(ball(0.035), Color(0.9, 0.1, 0.05), Vector3(-0.07, 1.87, -0.14), 3.0))
-	body.add_child(part(ball(0.035), Color(0.9, 0.1, 0.05), Vector3(0.07, 1.87, -0.14), 3.0))
+	# The head sits clear above the shoulders, with the eyes on its front (-Z) so they read in the dark.
+	body.add_child(part(ball(0.17), Color(0.75, 0.72, 0.66), Vector3(0.0, 1.78, 0.0)))
+	body.add_child(part(ball(0.045), Color(0.9, 0.1, 0.05), Vector3(-0.07, 1.8, -0.13), 4.0))
+	body.add_child(part(ball(0.045), Color(0.9, 0.1, 0.05), Vector3(0.07, 1.8, -0.13), 4.0))
 	return body
 
 

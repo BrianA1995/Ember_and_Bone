@@ -73,6 +73,8 @@ func _label(size: int, color: Color, anchor_y: float, offset_y: float) -> Label:
 	label.add_theme_color_override("font_outline_color", Color.BLACK)
 	label.add_theme_constant_override("outline_size", 6)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# A long line wraps inside the pane (a split-screen half is narrow) instead of running off its edge.
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.anchor_right = 1.0
 	label.anchor_top = anchor_y
