@@ -306,15 +306,16 @@ func flame_lean() -> float:
 	return _candle.lean_angle()
 
 
-## Lights the candle, or puts it away (or snuffs it). The maze does not change: the rooms around the
-## player stay as they were and go on changing out of sight. Only what the player sees shrinks, to the
-## room they stand in, by a dim grey light.
+## Lights the candle, or puts it away (or snuffs it). The rooms around the player exist just the same
+## (`light_radius` does not change) but only what the player sees shrinks, to the room they stand in, by
+## a dim grey light. The rooms beyond that are no longer seen, so they change at once, out of sight.
 func set_candle_lit(on: bool) -> void:
 	on = on and not _snuffed
 	if on == _candle.lit:
 		return
 	_candle.set_lit(on)
 	_sight.visible = not on
+	change_distance = _candle.visible_distance() + 0.5 if on else sight_range + 0.5
 
 
 func is_candle_lit() -> bool:

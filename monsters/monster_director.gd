@@ -146,25 +146,17 @@ func _update_view() -> void:
 		_view[player] = LightField.compute(grid, [{"cell": cell_at(player.global_position), "radius": radius}], false)
 
 
-## Can a monster in `monster_cell` go after `player`? A prisoner with a burning candle can be hunted from
-## the dark; one without a candle only when the monster is in a room they can see, which is their own: a
-## monster next door does not come for them until they walk into its room.
+## Can a monster in `monster_cell` go after `player`? Only from a lit room (see is_lit): a monster in the
+## dark ring around the lit rooms wanders until the light reaches it.
 func can_chase(player: Player, monster_cell: Vector2i) -> bool:
-	return player.is_candle_lit() or _view.get(player, {}).has(monster_cell)
+	return is_lit(player, monster_cell)
 
 
-## Can `player` see the room `monster_cell`? A monster only hits from a room the prisoner can see, so a
-## light never goes out to something that was not there to be seen.
-func can_see(player: Player, monster_cell: Vector2i) -> bool:
+## Is the room `monster_cell` lit for `player`: their own room and the rooms joined to it by an open
+## doorway when the candle burns, only their own room when it does not? Lit or not, the room is there
+## and may hold monsters; the player just may not see it.
+func is_lit(player: Player, monster_cell: Vector2i) -> bool:
 	return not _view.has(player) or _view[player].has(monster_cell)
-
-
-## Can any prisoner see the room `monster_cell`?
-func is_seen(monster_cell: Vector2i) -> bool:
-	for player in players:
-		if can_see(player, monster_cell):
-			return true
-	return players.is_empty()
 
 
 ## Is there a room standing at `cell`? A monster in a place with no room is going.
@@ -477,7 +469,7 @@ func can_hit(player: Player) -> bool:
 
 ## `monster` hits `player`: the candle goes out. Returns false (and does nothing) if they were hit lately.
 func hit(monster: Monster, player: Player) -> bool:
-	if not can_hit(player) or not can_see(player, monster.cell):
+	if not can_hit(player) or not is_lit(player, monster.cell):
 		return false
 	_immune[player] = hit_immunity
 	tension = maxf(tension - hit_relief, 0.0)

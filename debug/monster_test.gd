@@ -134,21 +134,26 @@ func _lurker() -> void:
 
 
 func _sight_and_limits() -> void:
-	print("-- out of sight, and one lurker at a time")
+	print("-- lit rooms, and one lurker at a time")
 	var player := _game.players[0]
 	var here := _director.cell_at(player.global_position)
-	var moth := _spawn(&"moth", here)
-	await _wait(0.1)
-	moth._mind_sight(0.1)
-	_check("a monster in a room a prisoner can see stays", moth._was_seen and not moth.is_going(), "")
-	_director._view[player] = {}
-	for i in 20:
-		moth._mind_sight(0.1)
-	_check("one out of sight for a moment is still there", not moth.is_going(), "")
-	for i in 20:
-		moth._mind_sight(0.1)
-	_check("but once out of every prisoner's sight for 3 s it is gone", moth.is_going(), "")
-	moth.queue_free()
+	await _wait(0.2)
+	var lit_cells: Dictionary = _director._view[player]
+	_check("a lit candle lights the room and the rooms joined to it", lit_cells.has(here) and lit_cells.size() > 1, "%d" % lit_cells.size())
+	var dark := _director.reachable(here, 2).keys().filter(func(c: Vector2i) -> bool: return not lit_cells.has(c))
+	if not dark.is_empty():
+		var moth := _spawn(&"moth", dark[0])
+		_check("a monster in the dark ring may not chase or hit", not _director.can_chase(player, dark[0]) and not _director.hit(moth, player), "")
+		moth.queue_free()
+	_check("but one in a lit room may", _director.can_chase(player, here), "")
+	var lit_change := player.change_distance
+	player.snuff()
+	await _wait(0.2)
+	_check("with the candle out only the player's own room is lit", _director._view[player].size() == _manager.grid.room_cells(here).size() and _director._view[player].has(here), "%d" % _director._view[player].size())
+	_check("and the rooms around change as they are no longer seen (the distance they must be seen from shrinks)", player.change_distance < lit_change, "%.1f vs %.1f" % [player.change_distance, lit_change])
+	player.relight()
+	await _wait(0.2)
+	_check("a lit candle sees as far as before", is_equal_approx(player.change_distance, lit_change), "")
 	var lurker := _spawn(&"lurker", here)
 	var saved: Dictionary = _director.weights
 	_director.weights = {&"lurker": 4.0}
@@ -322,9 +327,9 @@ func _chase() -> void:
 	var found := _director.reachable(here, 4)
 	var far := here
 	for cell in found:
-		if found[cell].steps > found[far].steps and found[cell].steps >= 2:
+		if found[cell].steps == 1 and _director.is_lit(player, cell):
 			far = cell
-	_check("there is a room a few doorways away to chase from", far != here, "")
+	_check("there is a lit room a doorway away to chase from", far != here, "")
 	_escape.keys_held[0] = 1
 	var thief := _director.spawn(&"thief", far) as Thief
 	await _wait(0.1)

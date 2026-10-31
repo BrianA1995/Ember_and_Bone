@@ -134,7 +134,7 @@ func _noticed_in_line() -> int:
 	for side in RoomDefs.SIDE_COUNT:
 		var rooms := director.lane(cell, side, longest_lane)
 		for player in director.players:
-			if _gives_away(player) and director.can_see(player, cell) and _in_lane(player, side, rooms):
+			if _gives_away(player) and director.is_lit(player, cell) and _in_lane(player, side, rooms):
 				return side
 	return -1
 
