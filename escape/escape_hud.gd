@@ -7,6 +7,7 @@ extends Control
 var _keys: Label
 var _gate: Label
 var _hint: Label
+var _gear: Label
 var _inventory := InventoryBar.new()
 
 
@@ -16,9 +17,15 @@ func _ready() -> void:
 	_keys = _label(26, MenuTheme.INK, 0.0, 12.0)
 	_gate = _label(34, MenuTheme.EMBER, 0.0, 52.0)
 	_hint = _label(24, MenuTheme.EMBER, 1.0, -96.0)
+	_gear = _label(22, MenuTheme.INK, 1.0, -60.0)
 	_gate.visible = false
 	_hint.visible = false
 	add_child(_inventory)
+
+
+## What the prisoner carries besides the candle and keys ("" for nothing), as one line above the hint.
+func show_gear(text: String) -> void:
+	_gear.text = text
 
 
 ## The items in the bottom right: `keys` held of `capacity`, which one is in hand (0 the candle).

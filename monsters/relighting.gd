@@ -1,27 +1,31 @@
 class_name Relighting
 extends Node
-## How a snuffed candle is lit again. A snuffed prisoner holds the interact button (E, or A) beside a
-## teammate whose candle burns, and takes a light from theirs.
-##
-## Matches and hearth rooms will be the other ways; until they exist `fallback_seconds` lights a
-## candle by itself after a while, so a prisoner alone is never stuck in the dark. Set it to 0 to turn
-## the fallback off.
+## How a snuffed candle is lit again, with the interact button (E, or A on a pad):
+##  - beside a teammate whose candle burns: hold it and take a light from theirs (free);
+##  - otherwise with matches: hold it while a match is struck (uses one up);
+##  - otherwise with a spare candle: press it and the spare is lit in place of yours (uses it up).
+## Hearth rooms will be another way. `fallback_seconds` is a last resort for testing: 0 turns it off.
 
-## How near, in metres, the lit candle has to be.
+## How near, in metres, a lit candle has to be.
 @export var relight_distance := 1.8
-## Seconds the button is held.
+## Seconds the button is held to take a light from a teammate.
 @export_range(0.2, 10.0, 0.1, "suffix:s") var hold_seconds := 1.5
-## A stand-in for matches and hearths: seconds after which a snuffed candle lights itself. 0 is never.
-@export_range(0.0, 120.0, 1.0, "suffix:s") var fallback_seconds := 12.0
+## Seconds the button is held to strike a match.
+@export_range(0.2, 10.0, 0.1, "suffix:s") var match_seconds := 1.0
+## Seconds after which a snuffed candle lights itself whatever happens. 0 is never.
+@export_range(0.0, 300.0, 1.0, "suffix:s") var fallback_seconds := 0.0
 
 var players: Array[Player] = []
+## What the prisoners carry; without it only teammates (and the fallback) can relight.
+var bag: ItemBag
 
 var _held: Dictionary = {}
 var _dark: Dictionary = {}
 
 
-func setup(p_players: Array[Player]) -> void:
+func setup(p_players: Array[Player], p_bag: ItemBag = null) -> void:
 	players = p_players
+	bag = p_bag
 
 
 func _physics_process(delta: float) -> void:
@@ -34,16 +38,40 @@ func _physics_process(delta: float) -> void:
 		if fallback_seconds > 0.0 and _dark[player] >= fallback_seconds:
 			player.relight()
 			continue
-		if _asking(player) and _light_near(player):
-			_held[player] = _held.get(player, 0.0) + delta
-			if _held[player] >= hold_seconds:
-				player.relight()
-		else:
-			_held[player] = 0.0
+		_ask(player, delta)
 
 
-func _asking(player: Player) -> bool:
-	return Input.is_action_pressed(GameInput.action(player.slot, &"interact"))
+## What the prisoner can do now to get a light, with the button named {interact}.
+func hint(player: Player) -> String:
+	if _light_near(player):
+		return "Hold {interact}: take a light from your teammate"
+	if bag and bag.count(player.slot, &"matches") > 0:
+		return "Hold {interact}: strike a match (%d left)" % bag.count(player.slot, &"matches")
+	if bag and bag.count(player.slot, &"spare_candle") > 0:
+		return "{interact}: light your spare candle"
+	return "Your candle is out: find a teammate's light, matches or a spare candle"
+
+
+func _ask(player: Player, delta: float) -> void:
+	var button := GameInput.action(player.slot, &"interact")
+	var needed := INF
+	var spend: StringName = &""
+	if _light_near(player):
+		needed = hold_seconds
+	elif bag and bag.count(player.slot, &"matches") > 0:
+		needed = match_seconds
+		spend = &"matches"
+	elif bag and bag.count(player.slot, &"spare_candle") > 0:
+		if Input.is_action_just_pressed(button) and bag.take(player.slot, &"spare_candle"):
+			player.relight()
+		return
+	if needed == INF or not Input.is_action_pressed(button):
+		_held[player] = 0.0
+		return
+	_held[player] = _held.get(player, 0.0) + delta
+	if _held[player] >= needed and (spend == &"" or bag.take(player.slot, spend)):
+		_held[player] = 0.0
+		player.relight()
 
 
 ## Is a teammate with a burning candle within reach?

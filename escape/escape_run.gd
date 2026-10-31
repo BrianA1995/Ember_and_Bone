@@ -76,6 +76,9 @@ var finished := false
 ## How far the gate that is unlocking has got, in seconds (0 when none is).
 var unlock_progress := 0.0
 var players: Array[Player] = []
+## Called as snuffed_hint.call(player) -> String for what a snuffed prisoner can do ("{interact}" is
+## replaced by the button's name); set by whoever knows how a candle is lit again.
+var snuffed_hint := Callable()
 
 var _manager: MazeManager
 var _grid: MazeGrid
@@ -207,7 +210,8 @@ func gate_status(slot: int) -> String:
 func prompt(slot: int) -> String:
 	var player := players[slot]
 	if player.is_snuffed():
-		return "Your candle is out: hold %s beside a lit candle" % _button_name(slot, &"interact")
+		var text: String = snuffed_hint.call(player) if snuffed_hint.is_valid() else "Your candle is out: hold {interact} beside a lit candle"
+		return text.replace("{interact}", _button_name(slot, &"interact"))
 	if keys_held[slot] < capacity() and _offerer_near(player) != null:
 		return "%s: take the key" % _button_name(slot, &"interact")
 	if players.size() > 1 and equipped[slot] > 0:
@@ -328,6 +332,11 @@ func _on_cell_removed(cell: Vector2i) -> void:
 			if _unlocking == anchor:
 				unlock_progress = 0.0
 			_check_lost()
+
+
+## The readout in player `slot`'s pane.
+func hud_at(slot: int) -> EscapeHud:
+	return _huds[slot]
 
 
 ## The anchor cells of the gates standing now.

@@ -130,8 +130,21 @@ func _add_escape() -> void:
 		_show_run_results("You escaped", ", ".join(names) + " got out.", escape))
 	escape.run_lost.connect(func(reason: String) -> void:
 		_show_run_results("The Cage keeps you", reason, escape))
+	_add_items()
 	if GameSettings.monsters:
 		_add_monsters()
+
+
+## Items to find in the maze (matches, a spare candle) and a line in each pane for what is carried.
+func _add_items() -> void:
+	var bag := ItemBag.new()
+	bag.name = "ItemBag"
+	add_child(bag)
+	var dealer := ItemDealer.new()
+	dealer.name = "ItemDealer"
+	add_child(dealer)
+	dealer.setup($MazeManager as MazeManager, bag, players.size())
+	bag.changed.connect(func(slot: int) -> void: escape.hud_at(slot).show_gear(bag.summary(slot)))
 
 
 ## The monsters, and the ways to get a snuffed candle lit again.
@@ -143,7 +156,8 @@ func _add_monsters() -> void:
 	var relighting := Relighting.new()
 	relighting.name = "Relighting"
 	add_child(relighting)
-	relighting.setup(players)
+	relighting.setup(players, $ItemBag as ItemBag)
+	escape.snuffed_hint = relighting.hint
 
 
 func _show_run_results(title: String, reason: String, run: EscapeRun) -> void:
