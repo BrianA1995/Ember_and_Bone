@@ -59,7 +59,7 @@ var _noises: Array[Dictionary] = []
 
 
 ## Drops and takes back items (for the Thief); null in a game without items.
-var items: ItemDealer
+var items: ItemScatter
 ## The chase helper from the tag mode, which the Mimic borrows to lead a prisoner to a Thief.
 var pursuit: Pursuit
 

@@ -14,7 +14,7 @@ extends Node
 var players: Array[Player] = []
 var escape: EscapeRun
 var bag: ItemBag
-var dealer: ItemDealer
+var scatter: ItemScatter
 var chalk: ChalkMarks
 
 var _manager: MazeManager
@@ -24,11 +24,11 @@ var _strings: Dictionary = {}
 var _pending: Array[Callable] = []
 
 
-func setup(p_players: Array[Player], p_escape: EscapeRun, p_bag: ItemBag, p_dealer: ItemDealer, p_manager: MazeManager) -> void:
+func setup(p_players: Array[Player], p_escape: EscapeRun, p_bag: ItemBag, p_scatter: ItemScatter, p_manager: MazeManager) -> void:
 	players = p_players
 	escape = p_escape
 	bag = p_bag
-	dealer = p_dealer
+	scatter = p_scatter
 	_manager = p_manager
 	chalk = ChalkMarks.new()
 	chalk.name = "ChalkMarks"
@@ -101,7 +101,7 @@ func _drop(player: Player) -> void:
 	elif held.type == &"item":
 		var amount := bag.take_stack(player.slot, held.kind)
 		if amount > 0:
-			dealer.drop(held.kind, cell, spot, amount)
+			scatter.drop(held.kind, cell, spot, amount)
 	else:
 		return
 	escape.equipped[player.slot] = 0

@@ -140,17 +140,17 @@ func _add_items() -> void:
 	var bag := ItemBag.new()
 	bag.name = "ItemBag"
 	add_child(bag)
-	var dealer := ItemDealer.new()
-	dealer.name = "ItemDealer"
-	add_child(dealer)
+	var scatter := ItemScatter.new()
+	scatter.name = "ItemScatter"
+	add_child(scatter)
 	bag.keys_of = func(slot: int) -> int: return escape.keys_held[slot]
 	bag.base_slots = escape.capacity
 	escape.bag = bag
-	dealer.setup($MazeManager as MazeManager, bag, players.size())
+	scatter.setup($MazeManager as MazeManager, bag, players.size())
 	var use := ItemUse.new()
 	use.name = "ItemUse"
 	add_child(use)
-	use.setup(players, escape, bag, dealer, $MazeManager as MazeManager)
+	use.setup(players, escape, bag, scatter, $MazeManager as MazeManager)
 
 
 ## The monsters, and the ways to get a snuffed candle lit again.
@@ -158,7 +158,7 @@ func _add_monsters() -> void:
 	var director := MonsterDirector.new()
 	director.name = "MonsterDirector"
 	add_child(director)
-	director.items = get_node_or_null("ItemDealer") as ItemDealer
+	director.items = get_node_or_null("ItemScatter") as ItemScatter
 	director.pursuit = $Pursuit
 	director.setup(players, $MazeManager as MazeManager, escape)
 	var relighting := Relighting.new()

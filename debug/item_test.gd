@@ -1,5 +1,5 @@
 extends Node
-## Plays the items in the real game scene (escape mode): the pack keeps counts up to a cap, the dealer
+## Plays the items in the real game scene (escape mode): the pack keeps counts up to a cap, the scatter
 ## deals three cards a prisoner and puts each on the floor of an ordinary room, walking over one takes
 ## it, one whose room goes dark is dealt again, and a snuffed candle is lit again with matches (hold the
 ## button, one is used) or a spare candle (press it), matches first.
@@ -8,7 +8,7 @@ extends Node
 var _failures := 0
 var _game: LocalGame
 var _bag: ItemBag
-var _dealer: ItemDealer
+var _scatter: ItemScatter
 var _manager: MazeManager
 
 
@@ -22,7 +22,7 @@ func _ready() -> void:
 	add_child(_game)
 	await _wait(0.5)
 	_bag = _game.get_node("ItemBag")
-	_dealer = _game.get_node("ItemDealer")
+	_scatter = _game.get_node("ItemScatter")
 	_manager = _game.get_node("MazeManager")
 	(_game.get_node("MonsterDirector") as MonsterDirector).enabled = false
 	_pack()
@@ -56,10 +56,8 @@ func _pack() -> void:
 
 
 func _dealing() -> void:
-	print("-- dealing")
-	_check("eight cards for a lone prisoner", _dealer.deck.size() == 8, "%d" % _dealer.deck.size())
-	var kinds: Array = _dealer.deck.map(func(card: Dictionary) -> StringName: return card.kind)
-	_check("every sort of item is dealt", kinds.has(&"pouch") and kinds.has(&"lamp") and kinds.has(&"string") and kinds.has(&"chalk") and kinds.has(&"walkie"), "%s" % [kinds])
+	print("-- scattering")
+	_check("there is no deck", not "deck" in _scatter, "")
 	var grid: MazeGrid = _manager.grid
 	var cell := Vector2i.ZERO
 	for candidate in grid.cells():
@@ -68,23 +66,54 @@ func _dealing() -> void:
 			cell = candidate
 			break
 	_check("an ordinary room is built", cell != Vector2i.ZERO or not RoomDefs.is_special(grid.get_cell(cell).piece), "")
+	_scatter.since_last = 0
+	_check("no item right after one", _scatter.chance() == 0.0, "")
+	_scatter.since_last = _scatter.min_gap
+	var first := _scatter.chance()
+	_scatter.since_last = _scatter.min_gap + 20
+	_check("the chance grows with every room built since the last", _scatter.chance() > first and first == _scatter.base_chance, "%.3f -> %.3f" % [first, _scatter.chance()])
+	_bag.setup(1)
+	var counts := {}
+	for i in 600:
+		var kind := _scatter._pick_kind()
+		counts[kind] = counts.get(kind, 0) + 1
+	_check("every sort turns up but a walkie-talkie for a lone prisoner", counts.size() == 6 and not counts.has(&"walkie"), "%s" % [counts])
+	_check("matches are the commonest when nobody has any", counts[&"matches"] > counts[&"pouch"], "%s" % [counts])
+	_bag.add(0, &"matches", 3)
+	_bag.add(0, &"matches", 3)
+	var again := {}
+	for i in 600:
+		var kind := _scatter._pick_kind()
+		again[kind] = again.get(kind, 0) + 1
+	_check("and rarer once the pack holds all it can", again.get(&"matches", 0) < counts[&"matches"] / 2, "%s" % [again])
+	_bag.setup(1)
 	var placed := []
-	_dealer.placed.connect(func(kind: StringName, where: Vector2i) -> void: placed.append([kind, where]))
-	_dealer.deck[0].at = 0
-	_dealer.builds = 5
-	_dealer._on_cell_added(cell)
-	_check("a due card puts its item in the room just built", placed.size() == 1 and placed[0][1] == cell, "%s" % [placed])
+	_scatter.placed.connect(func(kind: StringName, where: Vector2i) -> void: placed.append([kind, where]))
+	_scatter.base_chance = 1.0
+	_scatter.since_last = 50
+	_scatter._on_cell_added(cell)
+	_check("a room built when an item is due holds one", placed.size() == 1 and placed[0][1] == cell, "%s" % [placed])
+	_check("and the count starts again", _scatter.since_last == 0, "")
 	var room := _manager.view.room_at(cell)
 	var pickups := room.find_children("*", "ItemPickup", false, false)
 	_check("lying on the floor there", pickups.size() == 1, "%d" % pickups.size())
-	var decks := _dealer.deck.size()
-	_dealer._on_cell_removed(cell)
-	_check("an item whose room goes dark is dealt again", _dealer.deck.size() == decks + 1, "%d -> %d" % [decks, _dealer.deck.size()])
+	_scatter._on_cell_removed(cell)
+	_check("a scattered item whose room goes dark is gone, not owed", _scatter.owed.is_empty(), "%d owed" % _scatter.owed.size())
+	_scatter.base_chance = 0.02
+	_scatter.drop(&"lamp", cell, (pickups[0] as Node3D).global_position, 1)
+	_scatter._on_cell_removed(cell)
+	_check("one a prisoner put down is owed back", _scatter.owed.size() == 1 and _scatter.owed[0].kind == &"lamp", "%d owed" % _scatter.owed.size())
+	_scatter.builds = 100
+	_scatter.owed[0].at = 0
+	_scatter._on_cell_added(cell)
+	_check("and laid in the next room built", _scatter.owed.is_empty(), "")
+	var found := _manager.view.room_at(cell).find_children("*", "ItemPickup", false, false)
 	var player := _game.players[0]
-	player.global_position = (pickups[0] as Node3D).global_position + Vector3(0.0, 0.3, 0.0)
-	await _wait(0.4)
-	_check("walking over it takes it", _bag.count(0, &"matches") == 3, "%d" % _bag.count(0, &"matches"))
-	_check("and it takes a slot", _bag.used_slots(0) == 1, "")
+	_bag.setup(1)
+	_scatter.since_last = 0
+	player.global_position = (found[found.size() - 1] as Node3D).global_position + Vector3(0.0, 0.3, 0.0)
+	await _wait(1.6)
+	_check("walking over it takes it", _bag.used_slots(0) >= 1, "%d" % _bag.used_slots(0))
 
 
 func _relighting() -> void:

@@ -1,6 +1,6 @@
 class_name ItemPickup
 extends Area3D
-## An item lying on a room's floor (see ItemDealer). Whoever walks over it and has room for it takes it
+## An item lying on a room's floor (see ItemScatter). Whoever walks over it and has room for it takes it
 ## (`taken`) and it goes; a prisoner whose pack is full leaves it for later. Its look is a placeholder
 ## built by ItemDefs.build_model.
 

@@ -160,15 +160,21 @@ func _dark_rule() -> void:
 	player.reset_position()
 	player.relight()
 	await _wait(1.0)
-	var here := _director.cell_at(player.global_position)
+	var here := Vector2i.ZERO
 	var next := Vector2i.ZERO
 	var found := false
-	for side in RoomDefs.SIDE_COUNT:
-		var n := _director.grid.neighbor(here, side)
-		if _director.grid.has_cell(n) and not _director.grid.room_cells(here).has(n):
-			next = n
-			found = true
+	for candidate in _director.grid.cells():
+		for side in RoomDefs.SIDE_COUNT:
+			var n := _director.grid.neighbor(candidate, side)
+			if _director.grid.has_cell(n) and not _director.grid.room_cells(candidate).has(n) and _director.grid.is_open(candidate, side):
+				here = candidate
+				next = n
+				found = true
+				break
+		if found:
 			break
+	player.warp_to(RoomDefs.cell_to_world(here) + Vector3(0.0, 0.8, 0.0))
+	await _wait(0.5)
 	_check("there is a room next door", found, "")
 	_escape.keys_held[0] = 1
 	_escape.equipped[0] = 1
