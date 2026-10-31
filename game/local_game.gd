@@ -152,6 +152,8 @@ func _add_monsters() -> void:
 	var director := MonsterDirector.new()
 	director.name = "MonsterDirector"
 	add_child(director)
+	director.items = get_node_or_null("ItemDealer") as ItemDealer
+	director.pursuit = $Pursuit
 	director.setup(players, $MazeManager as MazeManager, escape)
 	var relighting := Relighting.new()
 	relighting.name = "Relighting"

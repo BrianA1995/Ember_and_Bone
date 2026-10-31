@@ -78,6 +78,8 @@ func room_at(cell: Vector2i) -> Node3D:
 ## While true, rooms appear and disappear at once instead of rising and sinking. The manager sets
 ## it for a moment while a player stands in the dark, so they never see a room move.
 var instant := false
+## A room that appears while a player stands in the dark fades in over this many seconds (0 = at once).
+@export_range(0.0, 5.0, 0.1, "suffix:s") var dark_fade_time := 1.5
 
 
 func _on_cell_added(cell: Vector2i) -> void:
@@ -103,6 +105,19 @@ func _on_cell_added(cell: Vector2i) -> void:
 		room.position.y = -rise_depth
 		room.create_tween().tween_property(room, "position:y", 0.0, rise_time) \
 				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	elif instant and dark_fade_time > 0.0:
+		_fade_in(room)
+
+
+## Brings a room out of nothing slowly, so it does not simply show up as a player crosses its threshold.
+func _fade_in(room: Node3D) -> void:
+	var meshes := room.find_children("*", "MeshInstance3D", true, false)
+	for mesh in meshes:
+		(mesh as MeshInstance3D).transparency = 1.0
+	room.create_tween().tween_method(func(amount: float) -> void:
+		for mesh in meshes:
+			if is_instance_valid(mesh):
+				(mesh as MeshInstance3D).transparency = 1.0 - amount, 0.0, 1.0, dark_fade_time)
 
 
 func _on_cell_removed(cell: Vector2i) -> void:

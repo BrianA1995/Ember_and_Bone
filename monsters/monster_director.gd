@@ -29,7 +29,7 @@ signal player_hit(monster: Monster, player: Player)
 @export_range(2, 10) var spawn_max_cells := 4
 ## How likely each kind is to be picked (a kind missing from here is never spawned at random). The
 ## Warden is not picked: it comes to a gate (see _spawn_wardens).
-@export var weights := {&"lurker": 4.0, &"thief": 2.0, &"weaver": 2.0, &"crawler": 3.0, &"moth": 3.0}
+@export var weights := {&"lurker": 4.0, &"thief": 2.0, &"weaver": 2.0, &"crawler": 3.0, &"moth": 3.0, &"leech": 2.0}
 @export_group("Hits")
 ## Seconds after a hit during which the same prisoner cannot be hit again, so a pile of monsters is not one long snuff.
 @export_range(0.0, 20.0, 0.5, "suffix:s") var hit_immunity := 4.0
@@ -55,6 +55,11 @@ var _webs: Dictionary = {}
 ## Sounds the players and the world made lately: {position, loudness, left}.
 var _noises: Array[Dictionary] = []
 
+
+## Drops and takes back items (for the Thief); null in a game without items.
+var items: ItemDealer
+## The chase helper from the tag mode, which the Mimic borrows to lead a prisoner to a Thief.
+var pursuit: Pursuit
 
 ## Starts watching `p_manager`'s maze for `p_players`. `p_run` is optional.
 func setup(p_players: Array[Player], p_manager: MazeManager, p_run: EscapeRun = null) -> void:
@@ -99,6 +104,7 @@ func _physics_process(delta: float) -> void:
 		return
 	_spawn_timer = spawn_interval
 	_spawn_wardens()
+	_spawn_mimic()
 	if monsters.size() < limit():
 		_spawn_random()
 
@@ -124,6 +130,8 @@ static func kinds() -> Dictionary:
 		&"crawler": Crawler,
 		&"moth": Moth,
 		&"warden": Warden,
+		&"leech": Leech,
+		&"mimic": Mimic,
 	}
 
 
@@ -135,6 +143,10 @@ func spawn(kind: StringName, cell: Vector2i) -> Monster:
 	add_child(monster)
 	monsters.append(monster)
 	monster.tree_exited.connect(func() -> void: monsters.erase(monster))
+	# Pursuit must not keep chasing something that is gone.
+	monster.tree_exiting.connect(func() -> void:
+		if pursuit != null and (pursuit.hunter == monster or pursuit.prey.has(monster)):
+			pursuit.stop())
 	return monster
 
 
@@ -194,6 +206,20 @@ func _spawn_wardens() -> void:
 			(spawn(&"warden", anchor) as Warden).home = anchor
 
 
+## A Mimic appears to lead a prisoner to a Thief, when there is a Thief and no Mimic yet.
+func _spawn_mimic() -> void:
+	var thief: Monster = null
+	for monster in monsters:
+		if monster is Mimic:
+			return
+		if monster is Thief:
+			thief = monster
+	var cells := _spawn_cells()
+	if thief == null or cells.is_empty() or rng.randf() > 0.5:
+		return
+	spawn(&"mimic", cells[rng.randi() % cells.size()])
+
+
 func _cells_to_nearest_player(cell: Vector2i) -> int:
 	var best := 1000
 	for player in players:
@@ -205,7 +231,7 @@ func _cells_to_nearest_player(cell: Vector2i) -> int:
 func _on_cell_removed(cell: Vector2i) -> void:
 	for monster in monsters.duplicate():
 		if monster.cell == cell:
-			monster.fall()
+			monster.fade_out()
 
 
 # --- The world, as monsters see it -----------------------------------------------------
@@ -396,9 +422,47 @@ func sounds() -> Array[Dictionary]:
 
 # --- Keys (the escape run owns them) ---------------------------------------------------
 
-## Does this prisoner carry anything a thief would want?
+## Does this prisoner carry anything a thief would want (a key or an item)?
 func carries_something(player: Player) -> bool:
-	return run != null and run.keys_held[player.slot] > 0
+	if run != null and run.keys_held[player.slot] > 0:
+		return true
+	return items != null and not items.bag.summary(player.slot).is_empty()
+
+
+## Takes one thing from `player` at random from what they carry: &"key", or the kind of an item.
+## &"" if they have nothing.
+func steal_from(player: Player) -> StringName:
+	var pool: Array[StringName] = []
+	if run != null and run.keys_held[player.slot] > 0:
+		pool.append(&"key")
+	if items != null:
+		for kind in ItemDefs.ITEMS:
+			if items.bag.count(player.slot, kind) > 0:
+				pool.append(kind)
+	if pool.is_empty():
+		return &""
+	var loot: StringName = pool[rng.randi() % pool.size()]
+	if loot == &"key":
+		steal_key(player)
+	else:
+		items.bag.take(player.slot, loot)
+	return loot
+
+
+## What a thief let fall lies on the floor where it stood.
+func drop_loot(loot: StringName, position: Vector3, cell: Vector2i) -> void:
+	if loot == &"key":
+		drop_key(position, cell)
+	elif items:
+		items.drop(loot, cell, position)
+
+
+## What a thief got away with goes back into the maze, to be found again later.
+func return_loot(loot: StringName) -> void:
+	if loot == &"key":
+		return_key()
+	elif items:
+		items.return_item(loot)
 
 
 ## Takes a key from `player`. False if they have none (or there is no run).

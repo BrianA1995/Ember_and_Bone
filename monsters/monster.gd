@@ -9,7 +9,7 @@ extends Node3D
 ##   suits(cell)    whether `cell` is a good place for one to start
 ##   _act(delta)    what it does each physics tick (not while stunned or after a hit)
 ##   on_hit(player) what it does to a prisoner it hits, besides snuffing their candle
-##   on_stunned(), on_fall()  what happens when it is stunned, or the room under it goes
+##   on_stunned(), on_fall()  what happens when it is stunned, or when it is going (faded out, burnt up)
 ## and sets hits_on_touch false if it hits some other way (the Lurker's charge).
 ##
 ## Every monster is stunned for a moment by a raised flame held up toward it.
@@ -106,7 +106,7 @@ func on_stunned() -> void:
 	pass
 
 
-## Called when the room under it goes, just before it falls.
+## Called when it is going (its room went dark, or it burnt up), just before it fades.
 func on_fall() -> void:
 	pass
 
@@ -129,15 +129,44 @@ func pause(seconds: float) -> void:
 	_pause_left = seconds
 
 
-## The room under it has gone: it sinks out of sight and is gone for good.
-func fall() -> void:
+## The room under it has gone, or its time is up: it fades out of sight and is gone for good.
+func fade_out(seconds := 0.9) -> void:
 	if _falling:
 		return
 	_falling = true
 	on_fall()
+	var meshes := find_children("*", "MeshInstance3D", true, false)
 	var tween := create_tween()
-	tween.tween_property(self, "position:y", -4.0, 0.5)
+	tween.tween_method(func(amount: float) -> void:
+		for mesh in meshes:
+			if is_instance_valid(mesh):
+				(mesh as MeshInstance3D).transparency = amount, 0.0, 1.0, seconds)
 	tween.tween_callback(queue_free)
+
+
+## It goes up in flame: a bright flash, shrinking away, gone in half a second.
+func burn_up() -> void:
+	if _falling:
+		return
+	_falling = true
+	on_fall()
+	var flash := OmniLight3D.new()
+	flash.light_color = Color(1.0, 0.6, 0.2)
+	flash.light_energy = 3.0
+	flash.omni_range = 3.5
+	flash.position.y = 1.0
+	add_child(flash)
+	for mesh in find_children("*", "MeshInstance3D", true, false):
+		var fire := StandardMaterial3D.new()
+		fire.albedo_color = Color(1.0, 0.55, 0.15)
+		fire.emission_enabled = true
+		fire.emission = Color(1.0, 0.5, 0.1)
+		fire.emission_energy_multiplier = 6.0
+		(mesh as MeshInstance3D).material_override = fire
+	var tween := create_tween().set_parallel(true)
+	tween.tween_property(model, "scale", Vector3.ONE * 0.2, 0.5)
+	tween.tween_property(flash, "light_energy", 0.0, 0.5)
+	tween.chain().tween_callback(queue_free)
 
 
 ## Heads straight for `goal` (a point on the floor); true once it is there.

@@ -40,7 +40,7 @@ func build_model() -> Node3D:
 
 func _act(delta: float) -> void:
 	if director.run == null or not director.run.gate_anchors().has(home):
-		fall()
+		fade_out()
 		return
 	_zone_timer -= delta
 	if _zone_timer <= 0.0:

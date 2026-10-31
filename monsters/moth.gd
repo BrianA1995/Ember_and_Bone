@@ -1,8 +1,8 @@
 class_name Moth
 extends Monster
 ## Flutters toward the brightest flame it can sense (a raised flame counts three times as bright as one
-## held low) and puts out any candle it touches. That is all it does. The flame bends toward it as it
-## nears.
+## held low) and flies straight into it: the candle goes out and the moth burns up. A suicide run, so
+## it only ever hits once. The flame bends toward it as it nears.
 ##
 ## Tell: fluttering, a flame leaning toward it. Survive: put the candle away, or shield it.
 
@@ -12,6 +12,8 @@ extends Monster
 ## How far (degrees) a flame leans toward it, and from how many metres away.
 @export_range(0.0, 60.0, 1.0) var lean_degrees := 30.0
 @export var lean_range := 8.0
+## How close, in metres, it must come to the flame itself (not the body) to fly into it.
+@export var flame_reach := 0.7
 
 var _wings: Array[MeshInstance3D] = []
 var _time := randf() * TAU
@@ -23,10 +25,13 @@ func _init() -> void:
 
 
 func _process(delta: float) -> void:
+	if model == null:
+		return
 	_time += delta * 24.0
 	for i in _wings.size():
 		_wings[i].rotation.z = (1.0 if i == 0 else -1.0) * sin(_time) * 0.7
-	model.position.y = 1.2 + sin(_time * 0.12) * 0.15
+	if not _falling:
+		model.position.y = 1.2 + sin(_time * 0.12) * 0.15
 
 
 func _exit_tree() -> void:
@@ -45,6 +50,10 @@ func build_model() -> Node3D:
 	return body
 
 
+func on_fall() -> void:
+	_calm_flame()
+
+
 func _act(delta: float) -> void:
 	var target := _brightest()
 	_lean_flame_of(target)
@@ -52,6 +61,18 @@ func _act(delta: float) -> void:
 		wander(move_speed * 0.5, delta)
 		return
 	go_to(director.cell_at(target.global_position), target.global_position, move_speed, delta)
+
+
+## It flies into a flame, not into the body: the candle goes out and the moth is gone.
+func _touch() -> void:
+	for player in director.players:
+		if not player.is_candle_lit():
+			continue
+		var to := director.offset(player.candle_position(), global_position)
+		if Vector2(to.x, to.z).length() <= flame_reach:
+			director.hit(self, player)
+			burn_up()
+			return
 
 
 ## The lit prisoner whose flame draws it most: bright and near.

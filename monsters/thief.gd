@@ -1,25 +1,27 @@
 class_name Thief
 extends Monster
-## Hunts a prisoner who carries a key. A touch snuffs their candle and takes the key; it runs off with
-## it. A flame held up at it makes it drop the key where it stands (and it bolts); if it gets away
-## with it, or falls, the key is lost from this place and turns up again somewhere new later. With
-## nobody carrying a key it only wanders.
+## Hunts a prisoner who carries something: a key, matches, a spare candle. A touch snuffs their candle
+## and takes one thing, chosen at random from what they carry; it runs off with it. A flame held up at
+## it makes it drop the thing where it stands (and it bolts); if it gets away with it, or fades out with
+## its room, the thing goes back into the maze and turns up again later. With nobody carrying anything
+## it only wanders.
 ##
-## Tell: a gold key on its back once it has one. Survive: keep your key out of reach, or stun it.
+## Tell: what it carries is on its back. Survive: keep out of reach, or stun it.
 
 @export_group("Thief")
-## Seconds it runs with a key before it is gone with it.
+## Seconds it runs with its loot before it is gone with it.
 @export_range(5.0, 120.0, 1.0, "suffix:s") var flee_seconds := 25.0
 @export var run_speed := 2.2
-## Seconds it bolts for after being made to drop the key, before it is gone.
+## Seconds it bolts for after being made to drop its loot, before it is gone.
 @export_range(1.0, 30.0, 0.5, "suffix:s") var scared_seconds := 5.0
 
 enum State { HUNT, FLEE, SCARED }
 
 var _state := State.HUNT
-var _carrying := false
+## What it carries: &"key", the kind of an item, or &"" for nothing.
+var _loot: StringName = &""
 var _timer := 0.0
-var _key: Node3D
+var _carried: Node3D
 var _away: Variant = null
 var _away_timer := 0.0
 
@@ -37,11 +39,11 @@ func build_model() -> Node3D:
 	body.add_child(part(ball(0.03), Color(1.0, 0.85, 0.2), Vector3(0.06, 0.88, -0.27), 3.0))
 	body.add_child(part(box(Vector3(0.08, 0.08, 0.7)), brown, Vector3(-0.3, 0.4, -0.25)))
 	body.add_child(part(box(Vector3(0.08, 0.08, 0.7)), brown, Vector3(0.3, 0.4, -0.25)))
-	_key = KeyPickup.build_model()
-	_key.position = Vector3(0.0, 0.6, 0.3)
-	_key.visible = false
-	body.add_child(_key)
 	return body
+
+
+func is_carrying() -> bool:
+	return _loot != &""
 
 
 func _act(delta: float) -> void:
@@ -55,32 +57,47 @@ func _act(delta: float) -> void:
 		State.FLEE, State.SCARED:
 			_timer -= delta
 			if _timer <= 0.0:
-				fall()
+				fade_out()
 				return
 			_run_away(delta)
 
 
 func on_hit(player: Player) -> void:
-	if director.steal_key(player):
-		_carrying = true
-		_key.visible = true
-		_state = State.FLEE
-		_timer = flee_seconds
+	var loot := director.steal_from(player)
+	if loot == &"":
+		return
+	_loot = loot
+	_show_loot(loot)
+	_state = State.FLEE
+	_timer = flee_seconds
 
 
 func on_stunned() -> void:
-	if _carrying:
-		director.drop_key(global_position, cell)
-		_carrying = false
-		_key.visible = false
+	if is_carrying():
+		director.drop_loot(_loot, global_position, cell)
+		_loot = &""
+		_show_loot(&"")
 		_state = State.SCARED
 		_timer = scared_seconds
 
 
 func on_fall() -> void:
-	if _carrying:
-		_carrying = false
-		director.return_key()
+	if is_carrying():
+		var loot := _loot
+		_loot = &""
+		director.return_loot(loot)
+
+
+## The loot on its back: a key, or the item's own model.
+func _show_loot(loot: StringName) -> void:
+	if _carried:
+		_carried.queue_free()
+		_carried = null
+	if loot == &"":
+		return
+	_carried = KeyPickup.build_model() if loot == &"key" else ItemDefs.build_model(loot)
+	_carried.position = Vector3(0.0, 0.6, 0.3)
+	model.add_child(_carried)
 
 
 func _run_away(delta: float) -> void:

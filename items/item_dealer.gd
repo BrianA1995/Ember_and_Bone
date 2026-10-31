@@ -72,20 +72,42 @@ func _on_cell_added(cell: Vector2i) -> void:
 
 
 func _place(kind: StringName, cell: Vector2i) -> void:
-	var room := _manager.view.room_at(cell)
-	if room == null:
+	if not _lay(kind, cell, null, ItemDefs.ITEMS[kind].gives):
 		_redeal(kind)
 		return
+	placed.emit(kind, cell)
+
+
+## Lays `amount` of `kind` on the floor of `cell`'s room, at `where` (a world position; null for the
+## middle). False if there is no room there.
+func _lay(kind: StringName, cell: Vector2i, where: Variant, amount: int) -> bool:
+	var room := _manager.view.room_at(cell)
+	if room == null:
+		return false
 	var pickup := ItemPickup.new()
 	pickup.kind = kind
-	pickup.position = Vector3(0.0, 0.45, 0.0)
 	pickup.accepts = func(player: Player) -> bool: return bag.has_room(player.slot, kind)
 	pickup.taken.connect(func(player: Player) -> void:
 		_lying.erase(pickup)
-		bag.add(player.slot, kind, ItemDefs.ITEMS[kind].gives))
+		bag.add(player.slot, kind, amount))
 	room.add_child(pickup)
+	if where == null:
+		pickup.position = Vector3(0.0, 0.45, 0.0)
+	else:
+		pickup.global_position = Vector3(where.x, 0.45, where.z)
 	_lying[pickup] = {"cell": cell, "kind": kind}
-	placed.emit(kind, cell)
+	return true
+
+
+## One `kind` dropped where a monster let it fall. If its room is gone it is dealt again instead.
+func drop(kind: StringName, cell: Vector2i, where: Vector3) -> void:
+	if not _lay(kind, cell, where, 1):
+		_redeal(kind)
+
+
+## Takes `kind` back out of the maze: it is dealt again a little later.
+func return_item(kind: StringName) -> void:
+	_redeal(kind)
 
 
 func _on_cell_removed(cell: Vector2i) -> void:

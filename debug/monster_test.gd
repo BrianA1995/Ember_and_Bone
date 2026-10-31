@@ -22,9 +22,12 @@ func _ready() -> void:
 	await _weaver()
 	_no_way()
 	await _chase()
+	await _new_behaviour()
 	await _warden()
 	await _falling_and_immunity()
 	await _spawning()
+	await _start(1)
+	await _mimic()
 	await _start(2)
 	await _relighting()
 	print("MONSTER TEST: %s" % ("PASS" if _failures == 0 else "FAIL (%d)" % _failures))
@@ -40,6 +43,8 @@ func _start(players: int) -> void:
 	GameSettings.maze_size = 30
 	GameInput.configure(players)
 	_game = (load("res://game/game.tscn") as PackedScene).instantiate() as LocalGame
+	# The start room would collapse after half a minute and take the test's footing with it.
+	(_game.get_node("MazeManager") as MazeManager).start_collapse_delay = 0.0
 	add_child(_game)
 	await _wait(0.5)
 	_escape = _game.escape
@@ -102,10 +107,10 @@ func _thief() -> void:
 	await _wait(0.1)
 	_director.hit(thief, player)
 	_check("the thief snuffs the candle", player.is_snuffed(), "")
-	_check("and takes the key", _escape.keys_held[0] == 0 and thief._carrying, "%d" % _escape.keys_held[0])
+	_check("and takes the key", _escape.keys_held[0] == 0 and thief.is_carrying(), "%d" % _escape.keys_held[0])
 	_check("a stolen key is no longer collected", _escape.keys_collected == 0, "%d" % _escape.keys_collected)
 	thief.stun(2.0)
-	_check("a stunned thief drops the key where it stands", not thief._carrying and _escape._loose.size() == 1, "%d" % _escape._loose.size())
+	_check("a stunned thief drops the key where it stands", not thief.is_carrying() and _escape._loose.size() == 1, "%d" % _escape._loose.size())
 	var placed := _escape.keys_placed
 	thief.queue_free()
 	player.relight()
@@ -113,7 +118,7 @@ func _thief() -> void:
 	var thief2 := _spawn(&"thief", _director.cell_at(player.global_position)) as Thief
 	_escape.keys_held[0] = 1
 	_director.hit(thief2, player)
-	thief2.fall()
+	thief2.fade_out()
 	_check("a thief that falls with a key gives it back to the maze to be found again", _escape.keys_placed == placed - 1, "%d vs %d" % [_escape.keys_placed, placed])
 	await _wait(0.7)
 	_escape.keys_held[0] = 0
@@ -166,15 +171,117 @@ func _chase() -> void:
 	var thief := _director.spawn(&"thief", far) as Thief
 	await _wait(0.1)
 	var waited := 0.0
-	while waited < 15.0 and is_instance_valid(thief) and not thief._carrying:
+	while waited < 15.0 and is_instance_valid(thief) and not thief.is_carrying():
 		await _wait(0.25)
 		waited += 0.25
-	_check("a thief walks the doorways to the prisoner and takes the key", is_instance_valid(thief) and thief._carrying, "%d doorways, waited %.1f s" % [found[far].steps, waited])
+	_check("a thief walks the doorways to the prisoner and takes the key", is_instance_valid(thief) and thief.is_carrying(), "%d doorways, waited %.1f s" % [found[far].steps, waited])
 	if is_instance_valid(thief):
 		thief.queue_free()
 	_escape.keys_held[0] = 0
 	player.relight()
 	_director._immune.clear()
+
+
+func _new_behaviour() -> void:
+	print("-- moth, thief, leech, weaver, mimic")
+	var player := _game.players[0]
+	player.reset_position()
+	player.relight()
+	await _wait(0.8)
+	_director._immune.clear()
+	var here := _director.cell_at(player.global_position)
+	var moth := _spawn(&"moth", here) as Moth
+	moth.global_position = Vector3(player.candle_position().x + 0.3, 0.0, player.candle_position().z)
+	moth._touch()
+	_check("a moth that reaches the flame snuffs it", player.is_snuffed(), "")
+	_check("and burns up doing it", moth._falling, "")
+	await _wait(0.8)
+	_check("then it is gone", not is_instance_valid(moth), "")
+	player.relight()
+	_director._immune.clear()
+	var bag: ItemBag = _game.get_node("ItemBag")
+	bag.setup(1)
+	bag.add(0, &"matches", 3)
+	var thief := _spawn(&"thief", here) as Thief
+	_director.hit(thief, player)
+	_check("a thief takes an item when there is no key", thief.is_carrying() and bag.count(0, &"matches") == 2, "%s" % thief._loot)
+	thief.stun(2.0)
+	await _wait(0.1)
+	var lying := _manager.view.room_at(here).find_children("*", "ItemPickup", false, false)
+	_check("a stunned thief drops it where it stands (the prisoner there picks it up again)", not thief.is_carrying() and (lying.size() >= 1 or bag.count(0, &"matches") == 3), "%d lying, %d carried" % [lying.size(), bag.count(0, &"matches")])
+	thief.queue_free()
+	player.relight()
+	_director._immune.clear()
+	var leech := _spawn(&"leech", here) as Leech
+	_director.hit(leech, player)
+	_check("a leech snuffs the candle and clings", player.is_snuffed() and leech.is_clinging(), "")
+	_check("the prisoner walks slower", player.speed_scale < 1.0 and player.is_slowed(), "%.2f" % player.speed_scale)
+	leech.slow_seconds = 0.5
+	leech._timer = 0.5
+	leech.set_physics_process(true)
+	player._slow_left = 0.5
+	await _wait(1.5)
+	_check("and when its time is up the prisoner is quick again", not player.is_slowed() and player.speed_scale == 1.0, "")
+	_check("the leech fades away", not is_instance_valid(leech), "")
+	player.relight()
+	_director._immune.clear()
+	await _exits_built(here)
+	var weaver := _spawn(&"weaver", here) as Weaver
+	var landed := _director.hit(weaver, player)
+	var side := weaver._web_side
+	_check("a weaver that snuffs a candle builds a web across a doorway and hangs on it",
+			weaver._state == Weaver.State.PERCH and _director.has_web(weaver._web_cell, side), "hit %s state %d" % [landed, weaver._state])
+	_manager.view.room_at(here).find_children("*", "Web", false, false).map(func(web: Node) -> void: web.queue_free())
+	await _wait(0.2)
+	weaver._act(0.1)
+	_check("when the web is burnt away it comes down to hunt", weaver._state == Weaver.State.HUNT, "")
+	weaver.queue_free()
+	player.relight()
+	_director._immune.clear()
+
+
+func _mimic() -> void:
+	print("-- mimic")
+	var player := _game.players[0]
+	var here := _director.cell_at(player.global_position)
+	await _exits_built(here)
+	var found := _director.reachable(here, 4)
+	var far := here
+	for cell in found:
+		if found[cell].steps > found[far].steps:
+			far = cell
+	var near := here
+	for cell in found:
+		if found[cell].steps == 2:
+			near = cell
+	var thief := _spawn(&"thief", far) as Thief
+	var mimic := _director.spawn(&"mimic", near) as Mimic
+	mimic.lead_distance = 30.0
+	mimic.hits_on_touch = false
+	var start := _director.offset(mimic.global_position, thief.global_position).length()
+	await _wait(0.3)
+	_check("the mimic leads with the tag mode's chase set to it and the thief", _director.pursuit.hunter == mimic and _director.pursuit.prey.has(thief), "")
+	var waited := 0.0
+	while waited < 20.0 and is_instance_valid(mimic) and mimic._state != Mimic.State.AT_THIEF:
+		player.global_position = mimic.global_position + Vector3(-3.0, 0.8, 0.0) if false else player.global_position
+		await _wait(0.25)
+		waited += 0.25
+	var finish := _director.offset(mimic.global_position, thief.global_position).length() if is_instance_valid(mimic) else 999.0
+	_check("it walks the course toward the thief", finish < start, "%.1f -> %.1f" % [start, finish])
+	if is_instance_valid(thief):
+		thief.queue_free()
+	await _wait(0.3)
+	_check("with the thief gone the chase stops", _director.pursuit.hunter != mimic, "")
+	if is_instance_valid(mimic):
+		mimic.queue_free()
+
+
+## Waits (up to a few seconds) for the rooms round `cell` to be built after the prisoner came back to it.
+func _exits_built(cell: Vector2i) -> void:
+	var waited := 0.0
+	while waited < 4.0 and _director.reachable(cell, 3).size() < 4:
+		await _wait(0.25)
+		waited += 0.25
 
 
 func _no_way() -> void:
@@ -183,6 +290,12 @@ func _no_way() -> void:
 	var here := _director.cell_at(player.global_position)
 	var far := player.global_position + Vector3(60.0, 0.0, 0.0)
 	_check("a target in rooms that do not exist has no path", _director.next_step(here, _director.cell_at(far)) == null, "")
+	var farthest := here
+	var found := _director.reachable(here, 14)
+	for room in found:
+		if found[room].steps > found[farthest].steps:
+			farthest = room
+	far = RoomDefs.cell_to_world(farthest) + Vector3(RoomDefs.cell_to_world(farthest) - RoomDefs.cell_to_world(here)).normalized() * 30.0
 	var step: Variant = _director.closest_step(here, far)
 	_check("but a monster still steps toward it, as near as the rooms allow", step != null or _director.reachable(here, 14).size() == 1, "%s" % [step])
 
@@ -239,8 +352,8 @@ func _falling_and_immunity() -> void:
 	player.relight()
 	_director._immune.clear()
 	_director._on_cell_removed(here)
-	await _wait(0.8)
-	_check("a monster falls with its room", not is_instance_valid(moth) or moth.is_queued_for_deletion(), "")
+	await _wait(1.4)
+	_check("a monster fades out when its room goes", not is_instance_valid(moth) or moth.is_queued_for_deletion(), "")
 	_check("and is gone from the Director", _director.monsters.is_empty(), "%d left" % _director.monsters.size())
 
 
