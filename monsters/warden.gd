@@ -50,7 +50,7 @@ func _act(delta: float) -> void:
 	var best := INF
 	for player in director.players:
 		var there := director.cell_at(player.global_position)
-		if _zone.has(there) and _zone[there].steps < best:
+		if director.can_chase(player, cell) and _zone.has(there) and _zone[there].steps < best:
 			best = _zone[there].steps
 			target = player
 	if target:

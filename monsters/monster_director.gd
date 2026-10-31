@@ -49,6 +49,8 @@ var elapsed := 0.0
 ## For anything a monster decides by chance, so a maze's monsters repeat for the same seed.
 var rng := RandomNumberGenerator.new()
 var _spawn_timer := 0.0
+## What each prisoner can see now, as sets of cells: the rooms their candle lights, or only their own room without it.
+var _view: Dictionary = {}
 var _immune: Dictionary = {}
 ## Doorways closed by a web: canonical key (see _web_key) -> Web.
 var _webs: Dictionary = {}
@@ -90,6 +92,7 @@ func _physics_process(delta: float) -> void:
 	if grid == null:
 		return
 	elapsed += delta
+	_update_view()
 	for player in _immune.keys():
 		_immune[player] -= delta
 		if _immune[player] <= 0.0:
@@ -107,6 +110,20 @@ func _physics_process(delta: float) -> void:
 	_spawn_mimic()
 	if monsters.size() < limit():
 		_spawn_random()
+
+
+func _update_view() -> void:
+	_view.clear()
+	for player in players:
+		var radius := ceili(player.candle_reach) if player.is_candle_lit() else 0
+		_view[player] = LightField.compute(grid, [{"cell": cell_at(player.global_position), "radius": radius}], false)
+
+
+## Can a monster in `monster_cell` go after `player`? A prisoner with a burning candle can be hunted from
+## the dark; one without a candle only when the monster is in a room they can see, which is their own: a
+## monster next door does not come for them until they walk into its room.
+func can_chase(player: Player, monster_cell: Vector2i) -> bool:
+	return player.is_candle_lit() or _view.get(player, {}).has(monster_cell)
 
 
 ## How many monsters there may be at once now.

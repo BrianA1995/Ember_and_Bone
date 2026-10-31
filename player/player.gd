@@ -87,9 +87,6 @@ const BODY_LAYER_FIRST := 10
 const SLOT_COLORS := [
 	Color(1.0, 0.60, 0.18), Color(0.35, 0.65, 1.0), Color(0.45, 0.85, 0.45), Color(0.85, 0.40, 0.85)]
 
-## What the maze reads while the candle burns, kept so it can be put back after the candle is put away.
-var _lit_radius := 2
-var _lit_change_distance := 6.0
 var _sight: OmniLight3D
 var _start_position: Vector3
 var _stand_height := 0.8
@@ -134,8 +131,6 @@ func _ready() -> void:
 	# half a metre out) must stop short of that or the changes become visible.
 	if _candle.light_range() + 0.5 > light_radius * RoomDefs.CELL_SIZE:
 		push_warning("Player: the candle's light reaches rooms that can still change; raise dark_margin")
-	_lit_radius = light_radius
-	_lit_change_distance = change_distance
 	_build_sight()
 
 
@@ -311,16 +306,15 @@ func flame_lean() -> float:
 	return _candle.lean_angle()
 
 
-## Lights the candle, or puts it away (or snuffs it). Without it nothing but the room the player
-## stands in exists around them (the maze reads light_radius 0), and they see it only by a dim grey light.
+## Lights the candle, or puts it away (or snuffs it). The maze does not change: the rooms around the
+## player stay as they were and go on changing out of sight. Only what the player sees shrinks, to the
+## room they stand in, by a dim grey light.
 func set_candle_lit(on: bool) -> void:
 	on = on and not _snuffed
 	if on == _candle.lit:
 		return
 	_candle.set_lit(on)
 	_sight.visible = not on
-	light_radius = _lit_radius if on else 0
-	change_distance = _lit_change_distance if on else 0.5
 
 
 func is_candle_lit() -> bool:

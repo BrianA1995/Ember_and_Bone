@@ -230,12 +230,13 @@ func face(direction: Vector3, delta: float) -> void:
 	rotation.y = lerp_angle(rotation.y, atan2(-direction.x, -direction.z), 1.0 - exp(-10.0 * delta))
 
 
-## The prisoner nearest to this monster (the short way round), or null; `only` filters them.
+## The prisoner nearest to this monster (the short way round) that it may chase (see
+## MonsterDirector.can_chase), or null; `only` filters them further.
 func nearest_player(only := Callable()) -> Player:
 	var best: Player = null
 	var best_distance := INF
 	for player in director.players:
-		if only.is_valid() and not only.call(player):
+		if (only.is_valid() and not only.call(player)) or not director.can_chase(player, cell):
 			continue
 		var distance := director.offset(global_position, player.global_position).length()
 		if distance < best_distance:

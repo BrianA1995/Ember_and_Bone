@@ -85,6 +85,8 @@ func _lead(delta: float) -> void:
 		_state = State.AT_THIEF
 		return
 	var prisoner := nearest_player()
+	if prisoner == null:
+		return
 	var to_prisoner := director.offset(global_position, prisoner.global_position)
 	if to_prisoner.length() > lead_distance and to_prisoner.length() <= wait_distance:
 		face(to_prisoner.normalized(), delta)

@@ -18,6 +18,7 @@ func _ready() -> void:
 	await _start(1)
 	await _lurker()
 	await _thief()
+	await _dark_rule()
 	await _crawler_and_moth()
 	await _weaver()
 	_no_way()
@@ -151,6 +152,37 @@ func _crawler_and_moth() -> void:
 	moth.queue_free()
 	player.relight()
 	_director._immune.clear()
+
+
+func _dark_rule() -> void:
+	print("-- a prisoner without a candle")
+	var player := _game.players[0]
+	player.reset_position()
+	player.relight()
+	await _wait(1.0)
+	var here := _director.cell_at(player.global_position)
+	var next := Vector2i.ZERO
+	var found := false
+	for side in RoomDefs.SIDE_COUNT:
+		var n := _director.grid.neighbor(here, side)
+		if _director.grid.has_cell(n) and not _director.grid.room_cells(here).has(n):
+			next = n
+			found = true
+			break
+	_check("there is a room next door", found, "")
+	_escape.keys_held[0] = 1
+	_escape.equipped[0] = 1
+	await _wait(0.3)
+	_check("the candle is away", not player.is_candle_lit(), "")
+	_check("the maze around a prisoner without a candle stays", _director.grid.has_cell(next), "")
+	var thief := _spawn(&"thief", next) as Thief
+	_check("a monster in the next room does not go after them", _director.can_chase(player, next) == false and thief.nearest_player() == null, "")
+	_check("one in their own room does", _director.can_chase(player, here) and _director.can_chase(player, _director.cell_at(player.global_position)), "")
+	_escape.equipped[0] = 0
+	await _wait(0.3)
+	_check("with the candle burning it can be hunted from the dark", _director.can_chase(player, next), "")
+	_escape.keys_held[0] = 0
+	thief.queue_free()
 
 
 func _chase() -> void:

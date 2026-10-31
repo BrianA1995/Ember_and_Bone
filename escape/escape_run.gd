@@ -174,6 +174,8 @@ func setup(p_players: Array[Player], split: SplitScreen) -> void:
 		var hud := EscapeHud.new()
 		split.pane_at(i).add_child(hud)
 		_huds.append(hud)
+		# A match struck or a spare candle lit: the hand goes back to the candle.
+		players[i].relit.connect(func() -> void: equipped[i] = 0)
 		var carrier := KeyCarrier.new()
 		players[i].add_child(carrier)
 		_carriers.append(carrier)

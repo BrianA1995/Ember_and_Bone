@@ -48,7 +48,7 @@ func setup(p_players: Array[Player], p_escape: EscapeRun, p_bag: ItemBag, p_deal
 func hint(player: Player, kind: StringName) -> String:
 	match kind:
 		&"candle":
-			if _strings.has(player.slot) and _strings[player.slot].active:
+			if _tied_string(player) != null:
 				return "{use}: tie off the string"
 		&"lamp":
 			return "{use}: set the lamp down"
@@ -73,8 +73,8 @@ func _physics_process(_delta: float) -> void:
 
 func _use(player: Player) -> void:
 	var held := escape.held_item(player.slot)
-	if held.type == &"candle" and _strings.has(player.slot) and _strings[player.slot].active:
-		_strings[player.slot].tie_off()
+	if held.type == &"candle" and _tied_string(player) != null:
+		_tied_string(player).tie_off()
 		return
 	if held.type != &"item":
 		return
@@ -119,8 +119,7 @@ func _set_lamp(player: Player) -> void:
 
 
 func _use_string(player: Player) -> void:
-	var old: StringLine = _strings.get(player.slot)
-	if old != null and old.active:
+	if _tied_string(player) != null:
 		return
 	if not bag.take(player.slot, &"string"):
 		return
@@ -129,6 +128,10 @@ func _use_string(player: Player) -> void:
 	line.start(player)
 	line.ran_out.connect(func() -> void: escape.hud_at(player.slot).show_message("The string has run out"))
 	_strings[player.slot] = line
+	line.tree_exited.connect(func() -> void:
+		if _strings.get(player.slot) == line:
+			_strings.erase(player.slot))
+	line.broken.connect(func() -> void: escape.hud_at(player.slot).show_message("The string broke"))
 	# The string pays out as they walk with the candle in hand; the use button then ties it off.
 	escape.equipped[player.slot] = 0
 
@@ -148,6 +151,12 @@ func _broadcast(from: Player, text: String) -> void:
 	for player in players:
 		var message := "Player %d: %s" % [from.slot + 1, text]
 		escape.hud_at(player.slot).show_message(message if player != from else "You: " + text)
+
+
+## The string `player` has tied on and still trails, or null.
+func _tied_string(player: Player) -> StringLine:
+	var line: StringLine = _strings.get(player.slot)
+	return line if is_instance_valid(line) and line.active else null
 
 
 func _clear_strings() -> void:

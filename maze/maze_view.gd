@@ -111,13 +111,7 @@ func _on_cell_added(cell: Vector2i) -> void:
 
 ## Brings a room out of nothing slowly, so it does not simply show up as a player crosses its threshold.
 func _fade_in(room: Node3D) -> void:
-	var meshes := room.find_children("*", "MeshInstance3D", true, false)
-	for mesh in meshes:
-		(mesh as MeshInstance3D).transparency = 1.0
-	room.create_tween().tween_method(func(amount: float) -> void:
-		for mesh in meshes:
-			if is_instance_valid(mesh):
-				(mesh as MeshInstance3D).transparency = 1.0 - amount, 0.0, 1.0, dark_fade_time)
+	RoomFade.fade_in(room, dark_fade_time)
 
 
 func _on_cell_removed(cell: Vector2i) -> void:

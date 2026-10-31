@@ -168,6 +168,33 @@ func _using() -> void:
 	await _wait(0.3)
 	use._use(player)
 	_check("using it again ties it off", not use._strings[0].active, "")
+	await _wait(0.2)
+	_check("a loose string fades and goes", use._strings[0]._fading, "")
+	var line := use._strings[0] as StringLine
+	line.fade_seconds = 0.5
+	await _wait(0.8)
+	_check("with its rooms let go", not is_instance_valid(line), "")
+	_bag.add(0, &"string", 1)
+	escape.equipped[0] = 1
+	use._use(player)
+	line = use._strings[0]
+	line.max_rooms = 2
+	for step in 4:
+		player.global_position += Vector3(RoomDefs.CELL_SIZE, 0.0, 0.0)
+		await _wait(0.1)
+	_check("a string that has run through its rooms comes away", not line.active and line.rooms() <= 2, "%d" % line.rooms())
+	line.queue_free()
+	_bag.add(0, &"string", 1)
+	escape.equipped[0] = 1
+	use._use(player)
+	line = use._strings[0]
+	player.fell.emit()
+	_check("falling breaks the string", not line.active, "")
+	_bag.add(0, &"matches", 3)
+	escape.equipped[0] = 1
+	player.snuff()
+	player.relight()
+	_check("a match used puts the hand back on the candle", escape.equipped[0] == 0, "")
 
 
 func _wait(seconds: float) -> void:

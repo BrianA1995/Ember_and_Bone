@@ -303,7 +303,7 @@ func _play_dark() -> void:
 	escape.equipped[0] = 1
 	two.warp_to(Vector3(RoomDefs.CELL_SIZE * 8.0, 0.8, 0))
 	await _wait(1.0)
-	_check("with the candle away, the player lights only their own room", one.light_radius == 0 and not one.is_candle_lit(), "radius %d" % one.light_radius)
+	_check("with the candle away, the maze around the player stays as it was", one.light_radius > 0 and not one.is_candle_lit(), "radius %d" % one.light_radius)
 	var here := RoomDefs.world_to_cell(one.global_position)
 	var neighbours := 0
 	for side in RoomDefs.SIDE_COUNT:
@@ -311,7 +311,7 @@ func _play_dark() -> void:
 		# (The start room is bigger than a cell: its other cells are part of the room they stand in.)
 		if manager.grid.has_cell(next) and not manager.grid.room_cells(here).has(next):
 			neighbours += 1
-	_check("and the rooms around them are gone", manager.grid.has_cell(here) and neighbours == 0, "%d left" % neighbours)
+	_check("and the rooms around them are still there", manager.grid.has_cell(here) and (neighbours > 0 or manager.reveal.lit.size() >= around), "%d left" % neighbours)
 	var sight := escape._sight
 	_check("their view goes nearly grey", sight.amount[0] > 0.8 and sight.amount[1] < 0.05, "%s" % [sight.amount])
 	two.warp_to(one.global_position + Vector3(1.0, 0, 0))
