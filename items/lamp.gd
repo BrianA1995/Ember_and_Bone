@@ -23,6 +23,9 @@ func _ready() -> void:
 	_light.light_energy = 1.6
 	_light.omni_range = 7.0
 	_light.position = Vector3(0.0, 0.5, 0.0)
+	# Walls stop the light (without shadows it shone through them, into the rooms next door).
+	_light.shadow_enabled = true
+	_light.shadow_bias = 0.03
 	add_child(_light)
 	position.y += 0.1
 
@@ -45,6 +48,15 @@ func _physics_process(delta: float) -> void:
 		elif _leaning.has(player):
 			_leaning.erase(player)
 			player.lean_flame(Vector3.ZERO)
+
+
+## Where the flame is and how far its light reaches, in metres; whether it burns still (it gutters out in its last seconds).
+func light_position() -> Vector3:
+	return _light.global_position
+
+
+func light_range() -> float:
+	return _light.omni_range * clampf((life_seconds - _age) / 5.0, 0.0, 1.0)
 
 
 func _exit_tree() -> void:

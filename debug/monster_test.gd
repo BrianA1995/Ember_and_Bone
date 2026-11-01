@@ -336,6 +336,9 @@ func _rules() -> void:
 	_director._immune.clear()
 	_director.hit(leech, player)
 	_check("the prisoner is slowed", player.is_slowed(), "")
+	leech._cling(0.016)
+	var across := Vector2(leech.global_position.x - player.global_position.x, leech.global_position.z - player.global_position.z).length()
+	_check("the leech sits on their head", leech.global_position.y > 1.3 and across < 0.2, "%.2f high, %.2f across" % [leech.global_position.y, across])
 	var spot := leech.global_position
 	player.fell.emit()
 	player.global_position += Vector3(40.0, 0.0, 0.0)

@@ -2,7 +2,7 @@ class_name DarkSight
 extends Node
 ## What a prisoner's view looks like without their candle: almost grayscale. A screen effect on
 ## each player's pane, faded in while their own candle is away, and faded out again while another
-## prisoner's burning candle reaches them (that light has its colour, and wins over the grey).
+## prisoner's burning candle, or a lamp set down, reaches them (that light has its colour, and wins over the grey).
 ##
 ## The dim grey light and the vanishing rooms belong to the Player (see Player.set_candle_lit);
 ## this node only does the colour. Placeholder look: the shader is below.
@@ -30,10 +30,13 @@ var players: Array[Player] = []
 var amount: Array[float] = []
 
 var _materials: Array[ShaderMaterial] = []
+## The maze, to find the lamps standing in it.
+var _maze: MazeManager
 
 
-func setup(p_players: Array[Player], split: SplitScreen) -> void:
+func setup(p_players: Array[Player], split: SplitScreen, p_maze: MazeManager) -> void:
 	players = p_players
+	_maze = p_maze
 	var shader := Shader.new()
 	shader.code = SHADER
 	for i in players.size():
@@ -58,20 +61,25 @@ func target(player: Player) -> float:
 	var grey := greyness
 	for other in players:
 		if other != player and other.is_candle_lit():
-			grey = minf(grey, greyness * (1.0 - _lit_by(other, player)))
+			grey = minf(grey, greyness * (1.0 - _lit_by(other.candle_position(), other.candle_range(), player, [other.get_rid()])))
+	if _maze != null:
+		for light in _maze.lights():
+			var lamp := light as Lamp
+			if lamp != null and lamp.light_range() > 0.0:
+				grey = minf(grey, greyness * (1.0 - _lit_by(lamp.light_position(), lamp.light_range(), player, [])))
 	return grey
 
 
-## 0-1: how much of `other`'s candle light reaches `player` (nothing through a wall).
-func _lit_by(other: Player, player: Player) -> float:
-	var reach := other.candle_range()
-	var from := other.candle_position()
+## 0-1: how much of a light at `from` that carries `reach` metres reaches `player` (nothing through a wall).
+func _lit_by(from: Vector3, reach: float, player: Player, exclude: Array[RID]) -> float:
 	var to := player.global_position + Vector3(0.0, 0.4, 0.0)
 	var distance := from.distance_to(to)
 	if distance >= reach:
 		return 0.0
 	var query := PhysicsRayQueryParameters3D.create(from, to)
-	query.exclude = [other.get_rid(), player.get_rid()]
+	var skip: Array[RID] = exclude.duplicate()
+	skip.append(player.get_rid())
+	query.exclude = skip
 	if not player.get_world_3d().direct_space_state.intersect_ray(query).is_empty():
 		return 0.0
 	return clampf((reach - distance) / (reach * (1.0 - full_colour_within)), 0.0, 1.0)

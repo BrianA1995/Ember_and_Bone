@@ -1,6 +1,6 @@
 class_name Leech
 extends Monster
-## Crawls after the nearest prisoner. A touch snuffs the candle and the leech clings to them: they
+## Crawls after the nearest prisoner. A touch snuffs the candle and the leech clings to their head: they
 ## walk at `slow_factor` of their speed and cannot sprint until `slow_seconds` are up, then it drops off
 ## and fades away. The timer is a stand-in: how a leech is shaken off may change later. It cannot be
 ## stunned while it clings.
@@ -17,8 +17,8 @@ extends Monster
 @export var carried_off_metres := 4.0
 ## How far, in rooms, it can sense a prisoner.
 @export_range(1, 12) var sense_cells := 5
-## Where it sits on a prisoner, in metres from their middle.
-@export var cling_at := Vector3(0.32, 0.55, 0.05)
+## Where it sits on a prisoner: on top of the head, a little toward the face (metres from the floor under them).
+@export var cling_at := Vector3(0.0, 1.5, -0.08)
 
 var _host: Player
 var _host_last := Vector3.ZERO
@@ -100,4 +100,8 @@ func _cling(delta: float) -> void:
 	if _timer <= 0.0:
 		_let_go()
 		return
-	global_position = _host.global_position + cling_at - Vector3(0.0, _host.global_position.y, 0.0)
+	# On the head, turned the way they face.
+	var facing := _host.facing()
+	var turn := Basis(Vector3.UP, atan2(-facing.x, -facing.z))
+	global_position = _host.global_position + turn * Vector3(cling_at.x, 0.0, cling_at.z) + Vector3(0.0, cling_at.y - _host.global_position.y, 0.0)
+	rotation.y = turn.get_euler().y

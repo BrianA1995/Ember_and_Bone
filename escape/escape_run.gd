@@ -200,7 +200,7 @@ func setup(p_players: Array[Player], split: SplitScreen, p_manager: MazeManager)
 		_carriers.append(carrier)
 	_dark_sight = DarkSight.new()
 	add_child(_dark_sight)
-	_dark_sight.setup(players, split)
+	_dark_sight.setup(players, split, _manager)
 	restart()
 
 

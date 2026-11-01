@@ -317,6 +317,20 @@ func _play_dark() -> void:
 	two.warp_to(one.global_position + Vector3(1.0, 0, 0))
 	await _wait(1.2)
 	_check("a burning candle beside them brings the colour back", sight.amount[0] < 0.05, "%s" % [sight.amount])
+	# A lamp set down beside them does the same, and its light stops at a wall.
+	two.warp_to(one.global_position + Vector3(30.0, 0, 0))
+	await _wait(1.2)
+	_check("away from every light the view is grey again", sight.amount[0] > 0.8, "%s" % [sight.amount])
+	var lamp := Lamp.new()
+	lamp.maze = manager
+	lamp.players = game.players
+	manager.view.room_at(manager.grid.cell_at(one.global_position)).add_child(lamp)
+	lamp.global_position = Vector3(one.global_position.x + 1.0, 0.0, one.global_position.z)
+	await _wait(1.2)
+	_check("a lamp set down beside them brings the colour back", sight.amount[0] < 0.05, "%s" % [sight.amount])
+	_check("and its light casts shadows, so it does not shine through walls", lamp._light.shadow_enabled, "")
+	lamp.queue_free()
+	await _wait(0.3)
 	escape.equipped[0] = 0
 	await _wait(0.3)
 	_check("lighting the candle again restores its light", one.light_radius > 0 and one.is_candle_lit(), "radius %d" % one.light_radius)
