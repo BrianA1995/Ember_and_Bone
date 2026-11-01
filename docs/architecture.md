@@ -14,7 +14,7 @@ GameSession (autoload)          menu <-> game scenes, nothing else
    ├─ SightMap                  which rooms each prisoner sees, worked out once and shared
    ├─ Pursuit                   the tag chase helper
    ├─ Mode: TagMode | EscapeRun the rules of the round
-   │   └─ ItemBag, ItemScatter, ItemUse, MonsterDirector, Relighting, SightGate (escape only)
+   │   └─ ItemBag, ItemScatter, ItemUse, MonsterDirector, Relighting, WaxShrines, SightGate (escape only)
    ├─ SplitScreen               one pane per player
    └─ PauseMenu                 MenuShell with the pages, given the maze and the rigs
 ```
@@ -86,3 +86,19 @@ example two friends on one couch joined by twelve online, sixteen in all). So th
 list of prisoners, each with a player id and an input source; the prisoners whose source is *local* also have a
 local slot, a pane and a HUD on this machine, and the rest are remote bodies this machine only draws. The host
 runs the simulation for all sixteen whichever machine they sit at.
+
+## The candle's wax
+
+A candle's life is `Wax` (player/wax.gd), owned by the `Player` that carries it: the game setup chooses how long
+it burns (`GameSettings.candle_minutes`, 0 never) and `EscapeRun.restart` hands every prisoner a fresh one. It
+burns while the flame is held (faster raised, slower put away, not at all blown out). The candle shows it by
+shortening and guttering; nothing prints a number. When it is gone the prisoner is in the dark, slow and cannot
+sprint, and only a refill helps: a spare candle (`Relighting`) or a wax shrine (`WaxShrines`, dealt into the maze
+by the candle's life). The raised flame is blown out with the use button (`ItemUse`), and a match lights it again.
+
+## Special rooms and what they do
+
+`key_alcove` / `gate_chamber`: `EscapeRun`. `wax_shrine`: `WaxShrines`. `safe_niche`: monsters cannot go in, hit
+anyone in it or be placed there while a prisoner inside has a lit flame (`MonsterDirector.is_sanctuary`).
+`echo_hall`: every sound a prisoner makes in it is louder, and standing still in it is heard
+(`MonsterDirector.sounds`; only the Crawler listens so far). The start chamber is also a sanctuary.

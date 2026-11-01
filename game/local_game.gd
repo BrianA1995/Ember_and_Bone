@@ -194,7 +194,7 @@ func _add_wax_shrines() -> void:
 	shrines.name = "WaxShrines"
 	add_child(shrines)
 	shrines.setup(players, maze)
-	escape.place_hint = shrines.hint
+	escape.place_hints.append(shrines.hint)
 
 
 ## The monsters.
@@ -206,6 +206,7 @@ func _add_monsters() -> void:
 	director.pursuit = $Pursuit
 	director.sight = sight
 	director.setup(players, maze, escape)
+	escape.place_hints.append(director.place_hint)
 
 
 func _show_run_results(title: String, reason: String, run: EscapeRun) -> void:

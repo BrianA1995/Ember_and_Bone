@@ -81,8 +81,9 @@ var sight: SightMap
 ## Called as snuffed_hint.call(player) -> String for what a snuffed prisoner can do ("{interact}" is
 ## replaced by the button's name); set by whoever knows how a candle is lit again.
 var snuffed_hint := Callable()
-## What a prisoner can do where they stand (a wax shrine's altar): called as place_hint.call(player) -> String.
-var place_hint := Callable()
+## What the room a prisoner stands in has to tell them (a wax shrine's altar, a safe niche): each is called as
+## hint.call(player) -> String, "" for nothing.
+var place_hints: Array[Callable] = []
 ## The items the prisoners carry (keys share its slots); set by whoever deals items.
 var bag: ItemBag
 ## Called as use_hint.call(player, held_kind) -> String for what the item in hand does ("" for nothing).
@@ -285,7 +286,7 @@ func prompt(slot: int) -> String:
 		lines.append("%s: put down" % _button_name(slot, &"drop_item"))
 	if hand_items(slot).size() > 1:
 		lines.append("%s: next item" % _button_name(slot, &"cycle_item"))
-	if place_hint.is_valid():
+	for place_hint in place_hints:
 		var here: String = place_hint.call(player)
 		if here != "":
 			lines.append(here.replace("{interact}", _button_name(slot, &"interact")))

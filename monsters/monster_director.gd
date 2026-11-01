@@ -23,6 +23,12 @@ signal player_hit(monster: Monster, player: Player)
 @export var enabled := true
 ## The start chamber is closed to monsters (see is_sanctuary). Tests that fight in it turn this off.
 @export var start_sanctuary := true
+
+@export_group("Rooms")
+## What a prisoner makes in an echo hall is this much louder to the monsters that listen (a prisoner there is heard
+## even standing still, softly).
+@export_range(1.0, 5.0, 0.1) var echo_boost := 2.5
+@export var echo_standing := 0.25
 @export_group("Pressure")
 ## Seconds after the run starts before the first monster.
 @export_range(0.0, 120.0, 1.0, "suffix:s") var grace_seconds := 10.0
@@ -81,6 +87,8 @@ var _immune: Dictionary = {}
 var _webs: Dictionary = {}
 ## Sounds the players and the world made lately: {position, loudness, left}.
 var _noises: Array[Dictionary] = []
+## The cells of safe niches with a prisoner inside whose flame burns, worked out each tick (see is_sanctuary).
+var _lit_niches: Dictionary = {}
 
 
 ## Drops and takes back items (for the Thief); null in a game without items.
@@ -127,6 +135,7 @@ func _physics_process(delta: float) -> void:
 	if grid == null:
 		return
 	elapsed += delta
+	_update_niches()
 	_update_tension(delta)
 	for player in _immune.keys():
 		_immune[player] -= delta
@@ -523,15 +532,24 @@ func make_noise(position: Vector3, loudness: float, seconds := 2.5) -> void:
 
 
 ## Everything that can be heard now: the prisoners (running is loud, walking quiet, standing still
-## silent) and the noises made lately. Each is {position, loudness}.
+## silent; an echo hall makes it all louder) and the noises made lately. Each is {position, loudness}.
 func sounds() -> Array[Dictionary]:
 	var heard: Array[Dictionary] = []
 	for player in players:
 		var speed := player.floor_speed()
-		if speed > 0.5:
-			heard.append({"position": player.global_position, "loudness": clampf(speed / player.sprint_speed, 0.0, 1.0)})
+		var loudness := clampf(speed / player.sprint_speed, 0.0, 1.0) if speed > 0.5 else 0.0
+		# An echo hall carries every sound far, and gives away someone standing still in it.
+		if _in_echo_hall(player):
+			loudness = maxf(loudness, echo_standing) * echo_boost
+		if loudness > 0.0:
+			heard.append({"position": player.global_position, "loudness": loudness})
 	heard.append_array(_noises)
 	return heard
+
+
+func _in_echo_hall(player: Player) -> bool:
+	var data := grid.get_cell(cell_at(player.global_position))
+	return not data.is_empty() and data.piece == &"echo_hall"
 
 
 # --- Keys (the escape run owns them) ---------------------------------------------------
@@ -614,10 +632,34 @@ func _short(delta: float, span: float) -> float:
 	return d - span if d * 2.0 > span else d
 
 
-## Is `cell` part of the start chamber? Monsters are never placed there, never walk into it and cannot hit
-## anyone standing in it: it is the one safe place until the floor gives way.
+## Is `cell` somewhere monsters cannot go? The start chamber (the one safe place until the floor gives way), and a
+## safe niche while a prisoner in it has their flame lit. Monsters are never placed in such a room, never walk into
+## it and cannot hit anyone standing in it.
 func is_sanctuary(cell: Vector2i) -> bool:
+	var wrapped := grid.wrap_cell(cell)
+	if _lit_niches.has(wrapped):
+		return true
 	if not start_sanctuary:
 		return false
 	var start := grid.get_cell(Vector2i.ZERO)
-	return not start.is_empty() and start.piece == manager.start_piece and grid.room_cells(Vector2i.ZERO).has(grid.wrap_cell(cell))
+	return not start.is_empty() and start.piece == manager.start_piece and grid.room_cells(Vector2i.ZERO).has(wrapped)
+
+
+## Which safe niches are lit now: those with a prisoner inside whose candle burns.
+func _update_niches() -> void:
+	_lit_niches.clear()
+	for player in players:
+		if not player.is_candle_lit():
+			continue
+		var here := cell_at(player.global_position)
+		var data := grid.get_cell(here)
+		if not data.is_empty() and data.piece == &"safe_niche":
+			_lit_niches[here] = true
+
+
+## What the room a prisoner stands in tells them ("" for nothing): a safe niche says whether it is safe.
+func place_hint(player: Player) -> String:
+	var data := grid.get_cell(cell_at(player.global_position))
+	if data.is_empty() or data.piece != &"safe_niche":
+		return ""
+	return "Monsters cannot follow you in here while your flame burns" if player.is_candle_lit() else "Light your candle: monsters cannot follow you in here while it burns"

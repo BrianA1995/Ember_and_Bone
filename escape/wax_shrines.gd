@@ -166,15 +166,15 @@ func _flame(room: Node3D, at: Vector3) -> Node3D:
 	flame.position = at
 	var mesh := MeshInstance3D.new()
 	var drop := SphereMesh.new()
-	drop.radius = 0.04
-	drop.height = 0.12
+	drop.radius = 0.025
+	drop.height = 0.08
 	mesh.mesh = drop
 	var fire := StandardMaterial3D.new()
 	fire.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	fire.albedo_color = Color(1.0, 0.85, 0.5)
+	fire.albedo_color = Color(1.0, 0.7, 0.35)
 	fire.emission_enabled = true
 	fire.emission = FLAME_COLOR
-	fire.emission_energy_multiplier = 3.0
+	fire.emission_energy_multiplier = 2.0
 	mesh.material_override = fire
 	mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	flame.add_child(mesh)
