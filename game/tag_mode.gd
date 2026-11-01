@@ -41,14 +41,16 @@ var pursuit: Pursuit
 
 var _players: Array[Player] = []
 var _huds: Array[TagHud] = []
+var _maze: MazeManager
 var _out_order: Array[int] = []
 var _head_start_left := 0.0
 var _cooldown_left := 0.0
 
 
 ## Starts a round for `players`, with a readout in each one's pane of `split`.
-func setup(players: Array[Player], split: SplitScreen, p_start_points: int) -> void:
+func setup(players: Array[Player], split: SplitScreen, p_start_points: int, p_maze: MazeManager) -> void:
 	_players = players
+	_maze = p_maze
 	start_points = p_start_points
 	holding_room = HoldingRoom.new()
 	add_child(holding_room)
@@ -68,7 +70,7 @@ func reset() -> void:
 		points.append(float(start_points))
 		alive.append(true)
 		# Anyone who was sent away lights the maze again (the caller moves them back to the start).
-		player.add_to_group("light_sources")
+		_maze.add_light(player)
 	it_slot = randi() % _players.size()
 	finished = false
 	_head_start_left = head_start
@@ -140,7 +142,7 @@ func _send_out(slot: int) -> void:
 	alive[slot] = false
 	_out_order.append(slot)
 	var player := _players[slot]
-	player.remove_from_group("light_sources")
+	_maze.remove_light(player)
 	player.warp_to(holding_room.spot(_out_order.size() - 1) + Vector3(0.0, player.global_position.y, 0.0))
 	player_out.emit(slot)
 	if players_in() <= 1:

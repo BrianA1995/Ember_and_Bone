@@ -20,6 +20,8 @@ signal broken
 @export var jump_metres := 4.0
 
 var owner_player: Player
+## The maze its rooms are kept alive in; set it before the string starts.
+var maze: MazeManager
 ## True while it is still tied to the prisoner.
 var active := true
 
@@ -109,6 +111,7 @@ func _keep(cell: Vector2i) -> void:
 	if _cells.has(cell):
 		return
 	var keeper := RoomKeeper.new()
+	keeper.maze = maze
 	add_child(keeper)
 	keeper.global_position = RoomDefs.cell_to_world(cell)
 	_cells[cell] = keeper

@@ -1,6 +1,6 @@
 extends Node3D
 ## Checks the cracked floor tile's rules on their own, with real physics. A stand-in body in
-## the "players" group is moved on and off tiles. Run debug/cracked_floor_test.tscn and read
+## a body on the bodies layer is moved on and off tiles. Run debug/cracked_floor_test.tscn and read
 ## the output for "CRACKED FLOOR TEST".
 ##
 ## Rules under test: a tile does nothing until stepped on; it collapses once bodies have stood
@@ -167,7 +167,7 @@ func _new_tile() -> CrackedFloor:
 	return tile
 
 
-## A stand-in for the player: a body in the "players" group, parked out of the way. With
+## A stand-in for the player: a body on the bodies physics layer, parked out of the way. With
 ## `with_candle`, it also has a small box held out to its left (toward -X), like the candle's.
 func _new_visitor(with_candle := false) -> CharacterBody3D:
 	var body := CharacterBody3D.new()
@@ -184,7 +184,7 @@ func _new_visitor(with_candle := false) -> CharacterBody3D:
 		candle.shape = box
 		candle.position = Vector3(-0.55, 0.1, 0.0)
 		body.add_child(candle)
-	body.add_to_group("players")
+	body.collision_layer = PhysicsLayers.BODIES
 	body.position = Vector3(0.0, 100.0, 0.0)
 	add_child(body)
 	return body

@@ -41,7 +41,7 @@ func _physics_process(delta: float) -> void:
 func _find_tile(body: Node3D) -> CrackedFloor:
 	var best: CrackedFloor = null
 	var best_distance := reach
-	for node in get_tree().get_nodes_in_group("cracked_floors"):
+	for node in get_tree().get_nodes_in_group(CrackedFloor.GROUP):
 		var tile := node as CrackedFloor
 		if tile == null or not tile.is_intact() or tile.is_occupied_by(body):
 			continue

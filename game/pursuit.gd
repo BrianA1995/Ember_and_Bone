@@ -54,7 +54,6 @@ var lost_time := 0.0
 var hunter: Node3D
 var prey: Array[Node3D] = []
 
-var _manager: MazeManager
 var _grid: MazeGrid
 var _clock_running := true
 ## Metres from the hunter to the nearest prey (the short way round), and the cell it is in.
@@ -64,11 +63,10 @@ var _hunter_cell := Vector2i.ZERO
 var _route_timer := 0.0
 
 
-func _ready() -> void:
-	_manager = get_tree().get_first_node_in_group("maze_manager") as MazeManager
-	if _manager:
-		_manager.maze_rebuilt.connect(func() -> void: bind_grid(_manager.grid))
-		bind_grid(_manager.grid)
+## Follows `manager`'s maze, and any new one it builds.
+func setup(manager: MazeManager) -> void:
+	manager.maze_rebuilt.connect(func() -> void: bind_grid(manager.grid))
+	bind_grid(manager.grid)
 
 
 ## Starts (or carries on) a chase. A new hunter starts the clock again. `clock_running` false holds

@@ -12,6 +12,10 @@ const SPLIT_NAMES := ["Side by side", "Stacked"]
 ## In the order of CameraRig.Mode.
 const VIEW_NAMES := ["Top down", "Third person", "First person"]
 
+## The camera rig of each player in the running game, in slot order, for choosing their views; empty in the
+## main menu, where there is no game. Set it before the page is shown.
+var rigs: Array[CameraRig] = []
+
 var _rows: VBoxContainer
 var _scroll: ScrollContainer
 var _list: VBoxContainer
@@ -124,10 +128,6 @@ func _fill_game_views() -> void:
 	for row in _game_views.get_children():
 		_game_views.remove_child(row)
 		row.queue_free()
-	var rigs: Array[CameraRig] = []
-	for node in get_tree().get_nodes_in_group("camera_rig"):
-		rigs.append(node as CameraRig)
-	rigs.sort_custom(func(a: CameraRig, b: CameraRig) -> bool: return a.slot < b.slot)
 	_start_view_row.visible = rigs.is_empty()
 	for rig in rigs:
 		var row := HBoxContainer.new()

@@ -78,7 +78,7 @@ func _tag_game() -> void:
 	_check("they are in the sealed room, far from the maze", body.global_position.distance_to(HoldingRoom.LOCATION) < 4.0, "%s" % body.global_position)
 	await _wait(1.0)
 	_check("standing on its floor", absf(body.global_position.y - 0.8) < 0.1 and not body.get("_falling"), "height %.2f" % body.global_position.y)
-	_check("they no longer light the maze", not body.is_in_group("light_sources"), "")
+	_check("they no longer light the maze", not game.maze.has_light(body), "")
 	_check("somebody still in is it", tag.alive[tag.it_slot] and tag.it_slot != loser, "%d" % tag.it_slot)
 	_check("the round goes on with two players", not tag.finished and results.is_empty(), "")
 	var second := tag.it_slot
@@ -98,7 +98,7 @@ func _tag_game() -> void:
 	await _wait(0.3)
 	_check("starts a new round with everyone back in", not tag.finished and tag.points.all(func(p: float) -> bool: return p > 49.0) and tag.alive == [true, true, true], "%s" % [tag.points])
 	_check("the player who was out is back at the start and lights the maze again",
-			body.is_in_group("light_sources") and body.global_position.length() < 20.0, "%s" % body.global_position)
+			game.maze.has_light(body) and body.global_position.length() < 20.0, "%s" % body.global_position)
 
 	print("-- rules")
 	GameSettings.player_count = 1

@@ -7,6 +7,9 @@ extends RoomKeeper
 @export var life_seconds := 60.0
 @export var lean_metres := 10.0
 
+## The prisoners whose flames lean toward it; set it before the lamp enters the tree.
+var players: Array[Player] = []
+
 var _age := 0.0
 var _light: OmniLight3D
 var _leaning: Array[Player] = []
@@ -32,8 +35,7 @@ func _physics_process(delta: float) -> void:
 		return
 	# It gutters in its last few seconds.
 	_light.light_energy = 1.6 * clampf((life_seconds - _age) / 5.0, 0.0, 1.0)
-	for node in get_tree().get_nodes_in_group("players"):
-		var player := node as Player
+	for player in players:
 		var apart := global_position - player.global_position
 		var near := player.is_candle_lit() and Vector2(apart.x, apart.z).length() <= lean_metres
 		if near:

@@ -38,12 +38,12 @@ func _ready() -> void:
 	_view = _manager.view
 	# This test is about the maze changing. A cracked floor would drop the player mid-test (the
 	# key alcove always has one, and the test revisits rooms), and has its own test
-	# (debug/cracked_floor_test.tscn). Cracked floors only react to bodies in the "players"
-	# group, so take the test player out of it; it stays a light source.
+	# (debug/cracked_floor_test.tscn). Cracked floors only react to bodies on the bodies physics layer,
+	# so take the test player off it; it stays a light source.
 	_manager.crack_chance = 0.0
 	# Likewise the start room's floor collapsing would drop the player (it has its own test).
 	_manager.start_collapse_delay = 0.0
-	_player.remove_from_group("players")
+	_player.collision_layer = 0
 	_player.fell.connect(func() -> void: _falls += 1)
 	# Rooms must be at their final position when checked, not still rising.
 	_view.rise_time = 0.0

@@ -170,7 +170,7 @@ func _using() -> void:
 	player.relight()
 	escape.equipped[0] = 1
 	use._use(player)
-	_check("the lamp is set down and used up", _bag.count(0, &"lamp") == 0 and get_tree().get_nodes_in_group("light_sources").any(func(n: Node) -> bool: return n is Lamp), "")
+	_check("the lamp is set down and used up", _bag.count(0, &"lamp") == 0 and _game.maze.lights().any(func(n: Node) -> bool: return n is Lamp), "")
 	await _wait(0.1)
 	_check("the candle is back in hand", player.is_candle_lit() and escape.equipped[0] == 0, "")
 	_bag.add(0, &"matches", 3)

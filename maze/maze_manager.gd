@@ -3,8 +3,9 @@ extends Node3D
 ## Wires the maze systems together: owns the grid, feeds it every light source each
 ## physics tick, and tells the MazeView what to show.
 ##
-## A light source is any node in the "light_sources" group with a `light_radius` (cells that
-## exist around it) and a `change_distance` (metres beyond which its light can't be seen).
+## A light source is any Node3D given to add_light() that has a `light_radius` (cells that exist around
+## it) and a `change_distance` (metres beyond which its light can't be seen). Whoever creates a light
+## registers it here; the manager looks at nothing else.
 
 signal maze_rebuilt
 
@@ -50,11 +51,12 @@ var start_collapse: StartCollapse
 ## Carries lights across the edges of a wrapping maze.
 var seam: SeamWrap
 
+var _lights: Array[Node3D] = []
+
 @onready var view: MazeView = $MazeView
 
 
 func _ready() -> void:
-	add_to_group("maze_manager")
 	seam = SeamWrap.new()
 	seam.manager = self
 	add_child(seam)
@@ -105,9 +107,32 @@ func build(new_seed: int = 0) -> void:
 ## New random maze, and everything that carries light goes back to the start.
 func restart() -> void:
 	build(0)
-	for node in get_tree().get_nodes_in_group("light_sources"):
+	for node in lights():
 		if node.has_method("reset_position"):
 			node.reset_position()
+
+
+## Makes `source` light the maze (see the top of this file). It stops when the node leaves the tree.
+func add_light(source: Node3D) -> void:
+	if not _lights.has(source):
+		_lights.append(source)
+
+
+## `source` no longer lights the maze.
+func remove_light(source: Node3D) -> void:
+	_lights.erase(source)
+
+
+func has_light(source: Node3D) -> bool:
+	return _lights.has(source)
+
+
+## The lights that are in the world now (one that has been freed or taken out of the tree is dropped).
+func lights() -> Array[Node3D]:
+	for i in range(_lights.size() - 1, -1, -1):
+		if not is_instance_valid(_lights[i]) or not _lights[i].is_inside_tree():
+			_lights.remove_at(i)
+	return _lights
 
 
 ## Where a body that fell ends up: the middle of a new room well away from where it was. The
@@ -147,7 +172,7 @@ func set_collapse_enabled(value: bool) -> void:
 
 func _light_sources() -> Array:
 	var sources := []
-	for node in get_tree().get_nodes_in_group("light_sources"):
+	for node in lights():
 		# A light a step past an edge, about to be carried across it, already counts as on the far side.
 		var position: Vector3 = seam.wrapped(node.global_position) if seam else node.global_position
 		sources.append({

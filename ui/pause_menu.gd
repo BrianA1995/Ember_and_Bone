@@ -3,6 +3,10 @@ extends CanvasLayer
 ## Esc (or the gamepad's Start) pauses the game and opens this menu: Resume, Settings, a new
 ## maze, back to the main menu, quit. Works in any game scene; it only pauses the tree.
 
+## The maze and the players' camera rigs of the game this menu pauses; set them with setup() before it opens.
+var maze: MazeManager
+var rigs: Array[CameraRig] = []
+
 var _panel: Control
 var _main_page: VBoxContainer
 var _settings_page: SettingsPage
@@ -35,6 +39,12 @@ func _ready() -> void:
 	_panel.visible = false
 
 
+func setup(p_maze: MazeManager, p_rigs: Array[CameraRig]) -> void:
+	maze = p_maze
+	rigs = p_rigs
+	_settings_page.rigs = p_rigs
+
+
 func is_open() -> bool:
 	return _panel.visible
 
@@ -55,8 +65,7 @@ func close() -> void:
 
 ## The mouse is captured while the player using it looks around in 3D, free otherwise.
 func _mouse_mode_for_game() -> Input.MouseMode:
-	for node in get_tree().get_nodes_in_group("camera_rig"):
-		var rig := node as CameraRig
+	for rig in rigs:
 		if rig.uses_mouse and rig.mode != CameraRig.Mode.TOP:
 			return Input.MOUSE_MODE_CAPTURED
 	return Input.MOUSE_MODE_VISIBLE
@@ -101,7 +110,5 @@ func _show_settings(shown: bool) -> void:
 
 ## Throws the maze away and puts everyone back at the start of a fresh one.
 func _new_maze() -> void:
-	var manager := get_tree().get_first_node_in_group("maze_manager") as MazeManager
-	if manager:
-		manager.restart()
+	maze.restart()
 	close()

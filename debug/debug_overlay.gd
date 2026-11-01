@@ -91,7 +91,7 @@ func _route_size() -> int:
 func _floor_line(player: Node3D) -> String:
 	if player == null:
 		return ""
-	for node in get_tree().get_nodes_in_group("cracked_floors"):
+	for node in get_tree().get_nodes_in_group(CrackedFloor.GROUP):
 		var tile := node as CrackedFloor
 		if tile and tile.is_intact() and tile.is_occupied_by(player):
 			return "Cracked floor: collapses in %.1f s" % maxf(tile.seconds_left(), 0.0)

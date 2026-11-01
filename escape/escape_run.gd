@@ -178,9 +178,9 @@ func keys_required() -> int:
 
 ## Starts a run for `p_players`, with a readout in each one's pane of `split`. A new maze (from the
 ## pause menu) starts a new run.
-func setup(p_players: Array[Player], split: SplitScreen) -> void:
+func setup(p_players: Array[Player], split: SplitScreen, p_manager: MazeManager) -> void:
 	players = p_players
-	_manager = get_tree().get_first_node_in_group("maze_manager") as MazeManager
+	_manager = p_manager
 	_manager.maze_rebuilt.connect(restart)
 	if sight == null:
 		sight = SightMap.new()

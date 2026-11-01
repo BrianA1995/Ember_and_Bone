@@ -5,8 +5,7 @@ extends Node3D
 ## 3D views show them. In the 3D views the mouse is captured for looking (Esc releases it,
 ## a click captures it again) and the player moves relative to where the camera faces.
 ##
-## Needs a Camera3D child named "Camera3D". Follows `target`, or the first node in
-## `target_group` if none is set.
+## Needs a Camera3D child named "Camera3D". Follows `target`, which whoever creates the rig sets.
 ##
 ## With several local players each has a rig (player/camera_rig.tscn); `slot` picks the input
 ## actions it listens to (see GameInput). Only one rig (`uses_mouse`, the player on the
@@ -18,7 +17,6 @@ enum Mode { TOP, THIRD, FIRST }
 
 @export var mode := Mode.TOP:
 	set = set_mode
-@export var target_group := &"players"
 ## Which local player this rig belongs to (0-3).
 @export var slot := 0
 ## Whether this rig turns with the mouse (and captures it in the 3D views).
@@ -66,7 +64,6 @@ var _top_position := Vector3.ZERO
 
 
 func _ready() -> void:
-	add_to_group("camera_rig")
 	GameInput.ensure_actions()
 	# The rig is positioned every frame from the target's interpolated position.
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
@@ -161,16 +158,7 @@ func _apply_mode() -> void:
 		pitch = deg_to_rad(third_start_pitch) if mode == Mode.THIRD else 0.0
 		if uses_mouse and not get_tree().paused:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	_update_ceilings()
 	mode_changed.emit(mode)
-
-
-## Ceilings are hidden while any player looks from above (the maze has one set of ceilings).
-func _update_ceilings() -> void:
-	var from_above := false
-	for node in get_tree().get_nodes_in_group("camera_rig"):
-		from_above = from_above or (node as CameraRig).mode == Mode.TOP
-	get_tree().call_group("maze_view", "set_hide_ceilings", from_above)
 
 
 ## Turns the view with the gamepad's look stick.
@@ -218,9 +206,7 @@ func _third_person_position(origin: Vector3) -> Vector3:
 
 
 func _find_target() -> Node3D:
-	if is_instance_valid(target):
-		return target
-	return get_tree().get_first_node_in_group(target_group) as Node3D
+	return target if is_instance_valid(target) else null
 
 
 ## The target's smoothed position, so the camera doesn't stutter between physics ticks.

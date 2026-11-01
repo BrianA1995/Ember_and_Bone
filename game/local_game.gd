@@ -2,7 +2,7 @@ class_name LocalGame
 extends Node3D
 ## A game for 1-4 local players on one screen. It sits on top of the maze: the maze scripts
 ## (MazeManager, MazeView, Lighting) know nothing about players or screens, they just light
-## the world around every node in the "light_sources" group.
+## the world around every light it registers with the MazeManager (the players).
 ##
 ## Builds, for each player: a body (player/player.tscn), a camera rig (player/camera_rig.tscn)
 ## and a view of the world in the split screen. Then keeps view settings in step with
@@ -30,6 +30,7 @@ var _map_layer: CanvasLayer
 var _devices: Array = []
 var _base_sensitivity := 0.0025
 
+@onready var maze: MazeManager = $MazeManager
 @onready var _players_root: Node3D = $Players
 @onready var _split: SplitScreen = $Views/SplitScreen
 
@@ -49,7 +50,10 @@ func _ready() -> void:
 	sight = SightMap.new()
 	sight.name = "SightMap"
 	add_child(sight)
-	sight.setup(players, $MazeManager as MazeManager)
+	sight.setup(players, maze)
+	$Pursuit.setup(maze)
+	$PauseMenu.setup(maze, rigs)
+	_update_ceilings()
 	_add_debug_overlay()
 	_add_map()
 	if GameSettings.is_tag_mode():
@@ -88,8 +92,17 @@ func _add_player(slot: int, count: int) -> void:
 	rig.name = "CameraRig%d" % (slot + 1)
 	add_child(rig)
 	_split.add_view(rig.get_camera(), slot, Player.SLOT_COLORS[slot])
+	player.rig = rig
+	player.maze = maze
+	maze.add_light(player)
+	rig.mode_changed.connect(func(_mode: CameraRig.Mode) -> void: _update_ceilings())
 	players.append(player)
 	rigs.append(rig)
+
+
+## Ceilings are hidden while any player looks from above (the maze has one set of ceilings).
+func _update_ceilings() -> void:
+	maze.view.hide_ceilings = rigs.any(func(rig: CameraRig) -> bool: return rig.mode == CameraRig.Mode.TOP)
 
 
 ## The test readout, shown if the settings ask for it. Built here so it finds the players.
@@ -116,12 +129,12 @@ func _add_tag() -> void:
 	tag.eliminate = GameSettings.game_mode == GameSettings.GameMode.TAG
 	tag.pursuit = $Pursuit
 	add_child(tag)
-	tag.setup(players, _split, GameSettings.tag_points)
+	tag.setup(players, _split, GameSettings.tag_points, maze)
 	tag.round_over.connect(func(standings: Array) -> void:
 		var results := TagResults.new()
 		add_child(results)
 		results.show_results(standings))
-	($MazeManager as MazeManager).maze_rebuilt.connect(tag.reset)
+	maze.maze_rebuilt.connect(tag.reset)
 
 
 ## Escape: keys and gates (its numbers are on the EscapeRun node), a readout in every pane, and a
@@ -129,7 +142,7 @@ func _add_tag() -> void:
 func _add_escape() -> void:
 	escape = $EscapeRun
 	escape.sight = sight
-	escape.setup(players, _split)
+	escape.setup(players, _split, maze)
 	escape.run_won.connect(func(escaped: Array) -> void:
 		var names: Array[String] = []
 		for slot in escaped:
@@ -140,7 +153,7 @@ func _add_escape() -> void:
 	var gate := SightGate.new()
 	gate.name = "SightGate"
 	add_child(gate)
-	gate.setup(sight, $MazeManager as MazeManager)
+	gate.setup(sight, maze)
 	_add_items()
 	if GameSettings.monsters:
 		_add_monsters()
@@ -157,11 +170,11 @@ func _add_items() -> void:
 	bag.keys_of = func(slot: int) -> int: return escape.keys_held[slot]
 	bag.base_slots = escape.base_slots
 	escape.bag = bag
-	scatter.setup($MazeManager as MazeManager, bag, players.size())
+	scatter.setup(maze, bag, players.size())
 	var use := ItemUse.new()
 	use.name = "ItemUse"
 	add_child(use)
-	use.setup(players, escape, bag, scatter, $MazeManager as MazeManager)
+	use.setup(players, escape, bag, scatter, maze)
 
 
 ## The monsters, and the ways to get a snuffed candle lit again.
@@ -172,7 +185,7 @@ func _add_monsters() -> void:
 	director.items = get_node_or_null("ItemScatter") as ItemScatter
 	director.pursuit = $Pursuit
 	director.sight = sight
-	director.setup(players, $MazeManager as MazeManager, escape)
+	director.setup(players, maze, escape)
 	var relighting := Relighting.new()
 	relighting.name = "Relighting"
 	add_child(relighting)
@@ -185,7 +198,7 @@ func _show_run_results(title: String, reason: String, run: EscapeRun) -> void:
 	var facts: Array[String] = [
 		"Keys found: %d of %d (%d lost to the dark)" % [run.keys_collected, run.keys_total, run.keys_lost],
 		"Time: %d:%02d" % [seconds / 60, seconds % 60],
-		"Maze seed: %d" % ($MazeManager as MazeManager).grid.seed_value,
+		"Maze seed: %d" % maze.grid.seed_value,
 	]
 	var results := RunResults.new()
 	add_child(results)

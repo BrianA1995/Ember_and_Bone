@@ -15,10 +15,13 @@ extends StaticBody3D
 ## The tell is visual: the cracks (drawn by hazards/cracked_floor.gdshader). There is no shake
 ## and no colour cue; the tile simply breaks once the cracks have covered it.
 ##
-## Scene layout (hazards/cracked_floor.tscn): Mesh and Collision. Bodies in the "players"
-## group are the ones that can stand on it.
+## Scene layout (hazards/cracked_floor.tscn): Mesh and Collision (it adds a detector of its own). Bodies on
+## the PhysicsLayers.BODIES layer are the ones that can stand on it; the tile only works while one is near.
 
 signal collapsed(tile: CrackedFloor)
+
+## Every tile is in this group, for whatever needs the tiles near a body (FloorStamp, the debug readout).
+const GROUP := &"cracked_floors"
 
 enum State { INTACT, ARMED, COLLAPSED }
 
@@ -41,21 +44,24 @@ var _occupied := false
 var _stand_total := 0.0
 var _spread := 0.0
 var _spread_origin := Vector2.ZERO
+## The bodies near enough to maybe be standing on it (the detector's); the tile does nothing without one.
+var _near: Array[Node3D] = []
 
 @onready var _mesh: MeshInstance3D = $Mesh
 @onready var _collision: CollisionShape3D = $Collision
 
 
 func _ready() -> void:
-	add_to_group("cracked_floors")
+	add_to_group(GROUP)
 	# Every tile gets its own crack pattern from the one shared material.
 	var pattern := pattern_seed if pattern_seed >= 0.0 else randf() * 100.0
 	_mesh.set_instance_shader_parameter(&"pattern_seed", pattern)
+	set_physics_process(false)
+	if breaks_when_stood_on:
+		add_child(_build_detector())
 
 
 func _physics_process(delta: float) -> void:
-	if state == State.COLLAPSED or not breaks_when_stood_on:
-		return
 	var standing := _bodies_standing_on_it()
 	_occupied = not standing.is_empty()
 	if not _occupied:
@@ -67,13 +73,6 @@ func _physics_process(delta: float) -> void:
 	spread_cracks(standing[0].global_position, _stand_total / warning_time)
 	if _stand_total >= warning_time:
 		_collapse()
-
-
-func _process(_delta: float) -> void:
-	if state == State.COLLAPSED:
-		return
-	_mesh.set_instance_shader_parameter(&"spread", _spread)
-	_mesh.set_instance_shader_parameter(&"spread_origin", _spread_origin)
 
 
 ## Collapses the tile now.
@@ -96,6 +95,8 @@ func spread_cracks(from_position: Vector3, amount: float) -> void:
 	_spread = maxf(_spread, clampf(amount, 0.0, 1.0))
 	var local := to_local(from_position)
 	_spread_origin = Vector2(local.x, local.z)
+	_mesh.set_instance_shader_parameter(&"spread", _spread)
+	_mesh.set_instance_shader_parameter(&"spread_origin", _spread_origin)
 
 
 func is_intact() -> bool:
@@ -122,17 +123,47 @@ func seconds_left() -> float:
 	return warning_time - _stand_total
 
 
+## A box over the tile that notices bodies coming and going, so the tile can sleep while there are none.
+func _build_detector() -> Area3D:
+	var detector := Area3D.new()
+	detector.collision_layer = 0
+	detector.collision_mask = PhysicsLayers.BODIES
+	detector.monitorable = false
+	var box := BoxShape3D.new()
+	box.size = Vector3(_half * 2.0, stand_height + 0.3, _half * 2.0)
+	var shape := CollisionShape3D.new()
+	shape.shape = box
+	shape.position.y = (stand_height - 0.3) * 0.5
+	detector.add_child(shape)
+	detector.body_entered.connect(_on_body_entered)
+	detector.body_exited.connect(_on_body_exited)
+	return detector
+
+
+func _on_body_entered(body: Node3D) -> void:
+	_near.append(body)
+	# The flag can be switched off after the tile is made (the start chamber's floor breaks on a schedule).
+	if state != State.COLLAPSED and breaks_when_stood_on:
+		set_physics_process(true)
+
+
+func _on_body_exited(body: Node3D) -> void:
+	_near.erase(body)
+	if _near.is_empty():
+		set_physics_process(false)
+
+
 func _bodies_standing_on_it() -> Array[Node3D]:
 	var standing: Array[Node3D] = []
-	for node in get_tree().get_nodes_in_group("players"):
-		var body := node as Node3D
-		if body and is_occupied_by(body):
+	for body in _near:
+		if is_instance_valid(body) and is_occupied_by(body):
 			standing.append(body)
 	return standing
 
 
 func _collapse() -> void:
 	state = State.COLLAPSED
+	set_physics_process(false)
 	_collision.set_deferred(&"disabled", true)
 	_mesh.visible = false
 	FloorDebris.burst(self)

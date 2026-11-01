@@ -87,12 +87,16 @@ const BODY_LAYER_FIRST := 10
 const SLOT_COLORS := [
 	Color(1.0, 0.60, 0.18), Color(0.35, 0.65, 1.0), Color(0.45, 0.85, 0.45), Color(0.85, 0.40, 0.85)]
 
+## The camera rig that follows this body, and the maze it walks in; both are set by whoever creates the
+## player (LocalGame) before it enters the tree. Either may be null (a body alone in a test).
+var rig: CameraRig
+var maze: MazeManager
+
 var _sight: OmniLight3D
 var _start_position: Vector3
 var _stand_height := 0.8
 ## How far the candle is raised in front of the face: 0 held at the side, 1 fully up.
 var _raise := 0.0
-var _rig: CameraRig
 var _falling := false
 var _fall_speed := 0.0
 var _fall_time := 0.0
@@ -121,7 +125,6 @@ func _ready() -> void:
 	collision_layer = PhysicsLayers.BODIES
 	collision_mask = PhysicsLayers.WORLD | PhysicsLayers.BODIES
 	add_to_group("players")
-	add_to_group("light_sources")
 	motion_mode = MOTION_MODE_FLOATING
 	_start_position = global_position
 	_grace_left = spawn_grace
@@ -141,8 +144,6 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if _slow_left > 0.0:
 		_slow_left -= delta
-	if _rig == null:
-		_rig = _find_rig()
 	_hold_candle()
 	if _falling:
 		_fall(delta)
@@ -160,18 +161,6 @@ func reset_position() -> void:
 	_unsupported_ticks = 0
 	_grace_left = spawn_grace
 	reset_physics_interpolation()
-
-
-## The camera rig that follows this body: the one that targets it, else the first there is.
-func _find_rig() -> CameraRig:
-	var first: CameraRig = null
-	for node in get_tree().get_nodes_in_group("camera_rig"):
-		var rig := node as CameraRig
-		if rig.target == self:
-			return rig
-		if first == null:
-			first = rig
-	return first
 
 
 ## Gives the body its slot's colour (its own material, so other bodies keep theirs).
@@ -197,7 +186,7 @@ func _walk(delta: float) -> void:
 			GameInput.action(slot, &"move_right"), GameInput.action(slot, &"move_forward"), GameInput.action(slot, &"move_back"))
 	var sprinting := Input.is_action_pressed(GameInput.action(slot, &"sprint")) and not is_slowed()
 	var speed := (sprint_speed if sprinting else walk_speed) * speed_scale()
-	var facing := _rig.movement_basis if _rig else Basis.IDENTITY
+	var facing := rig.movement_basis if rig else Basis.IDENTITY
 	var direction := facing * Vector3(input.x, 0.0, input.y)
 	velocity = direction * speed
 	move_and_slide()
@@ -229,16 +218,16 @@ func _is_supported() -> bool:
 
 ## Turns the body to face where it is going (or where the camera looks, in first person).
 func _update_visual(direction: Vector3, delta: float) -> void:
-	var first_person := _rig != null and _rig.is_first_person()
+	var first_person := rig != null and rig.is_first_person()
 	# The body is drawn on its own layer (besides the default one) that only its owner's first-person
 	# camera leaves out, so a teammate still sees it.
 	var own_layer := 1 << (BODY_LAYER_FIRST + slot)
 	_visual.layers = 1 | own_layer
-	if _rig != null:
-		var camera := _rig.get_camera()
+	if rig != null:
+		var camera := rig.get_camera()
 		camera.cull_mask = 0xFFFFF & ~own_layer if first_person else 0xFFFFF
 	if first_person:
-		_visual.rotation.y = _rig.yaw
+		_visual.rotation.y = rig.yaw
 	elif direction.length_squared() > 0.01:
 		var goal := atan2(-direction.x, -direction.z)
 		_visual.rotation.y = lerp_angle(_visual.rotation.y, goal, 1.0 - exp(-turn_speed * delta))
@@ -279,11 +268,10 @@ func _land() -> void:
 ## Wakes the body in a new room far from where it fell (the maze builds one), or back at the
 ## start if there is no maze to ask.
 func _land_somewhere_new() -> void:
-	var manager := get_tree().get_first_node_in_group("maze_manager") as MazeManager
-	if manager == null:
+	if maze == null:
 		reset_position()
 		return
-	var spot := manager.landing_point(global_position)
+	var spot := maze.landing_point(global_position)
 	reset_position()
 	global_position = Vector3(spot.x, _stand_height, spot.z)
 	reset_physics_interpolation()

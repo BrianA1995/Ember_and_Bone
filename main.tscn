@@ -6,8 +6,10 @@
 [ext_resource type="Script" uid="uid://c14uirl8ai2db" path="res://debug/debug_overlay.gd" id="5_kek77"]
 [ext_resource type="Script" uid="uid://ewxhxkl55e11" path="res://player/camera_rig.gd" id="5_lquwl"]
 [ext_resource type="Script" uid="uid://d0ac5hvdrov47" path="res://lighting/maze_lighting.gd" id="6_7mycd"]
+[ext_resource type="Script" path="res://game/sandbox.gd" id="7_sandbox"]
 
 [node name="Main" type="Node3D" unique_id=2055107135]
+script = ExtResource("7_sandbox")
 
 [node name="MazeManager" type="Node3D" parent="." unique_id=1117179014]
 script = ExtResource("1_lquwl")

@@ -113,6 +113,8 @@ func _set_lamp(player: Player) -> void:
 	if room == null or not bag.take(player.slot, &"lamp"):
 		return
 	var lamp := Lamp.new()
+	lamp.maze = _manager
+	lamp.players = players
 	room.add_child(lamp)
 	lamp.global_position = Vector3(spot.x, 0.0, spot.z)
 	escape.equipped[player.slot] = 0
@@ -124,6 +126,7 @@ func _use_string(player: Player) -> void:
 	if not bag.take(player.slot, &"string"):
 		return
 	var line := StringLine.new()
+	line.maze = _manager
 	add_child(line)
 	line.start(player)
 	line.ran_out.connect(func() -> void: escape.hud_at(player.slot).show_message("The string has run out"))

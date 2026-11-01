@@ -4,6 +4,9 @@ extends Node3D
 ## on a line of string. The maze reads it like a player standing in the dark (a light source with no
 ## radius), but it never makes rooms around a dark player appear at once (see MazeManager).
 
+## The maze it keeps alive; set it before the keeper enters the tree.
+var maze: MazeManager
+
 ## Read by the maze.
 var light_radius := 0
 var change_distance := 0.5
@@ -11,4 +14,4 @@ var keep_only := true
 
 
 func _ready() -> void:
-	add_to_group("light_sources")
+	maze.add_light(self)
