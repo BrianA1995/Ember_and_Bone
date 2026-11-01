@@ -188,7 +188,10 @@ func _on_cell_restored(cell: Vector2i) -> void:
 func crack_floor(room: Node3D) -> Array[Node3D]:
 	var tiles: Array[Node3D] = []
 	for plain in room.get_children():
-		if not str(plain.name).begins_with("Floor") or plain is CrackedFloor:
+		if not str(plain.name).begins_with("Floor"):
+			continue
+		if plain is CrackedFloor:
+			tiles.append(plain)
 			continue
 		var tile: Node3D = _scene_at(RoomDefs.CRACKED_FLOOR_SCENE).instantiate()
 		tile.name = plain.name

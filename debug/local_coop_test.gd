@@ -113,7 +113,7 @@ func _try_views() -> void:
 	_check("everyone starts in the chosen view", game.rigs[0].mode == CameraRig.Mode.FIRST and game.rigs[1].mode == CameraRig.Mode.FIRST, "")
 	var pause := game.get_node("PauseMenu") as PauseMenu
 	pause.open()
-	var page: SettingsPage = pause._settings_page
+	var page: SettingsPage = pause.settings_page
 	page.refresh()
 	_check("in a game the settings list each player's view, not the starting view",
 			page._game_views.get_child_count() == 2 and not page._start_view_row.visible, "%d rows" % page._game_views.get_child_count())

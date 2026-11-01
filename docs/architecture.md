@@ -48,3 +48,41 @@ Only registries the owning class defines and documents: `SightGate.GROUP` (thing
 Every test is a scene: `godot --headless --path . res://debug/<name>.tscn`. `camera_clip_test` guards the
 blinking fix; `cracked_floor_test` the floor detector; `monster_test`, `escape_test`, `item_test`, `tag_test`,
 `local_coop_test`, `wrap_test` the systems. `debug/autoplay.tscn` plays a whole solo run in the real window.
+
+## Online play (planned): rules to code by now
+
+The goal is one machine hosting and up to 16 players joining. None of it is built yet; these rules keep the
+code from making it hard. The host is authoritative: it runs the maze, the monsters, the items and the rules.
+Clients send what the player wants to do and draw what the host tells them.
+
+1. **Simulation and presentation are separate.** A player is a *body* (host: position, candle, falls, hits),
+   an *input source* (who is steering it) and a *view* (camera rig, HUD, pane: this machine only). A host with no
+   screen must be able to run the whole game without ever creating a view.
+2. **Input is data, not a device.** The body asks its input source for this tick's move, look, sprint and button
+   presses. Sources: local (keyboard / pad), remote (commands from the network), bot (the autoplay).
+3. **Two different numbers, never one.** A *local slot* (0-3) is a pane and an input device on this machine: at
+   most four per machine (split screen). A *player id* (0-15) is a prisoner in the game: at most sixteen over all
+   machines. They are different things and the code must never use one for the other. Everything about the
+   game (keys held, points, who is it, colours, the roster) is indexed by player id and sized by the roster, never
+   by a fixed four. Everything about this machine's screen and controls (panes, HUDs, input actions) is indexed
+   by local slot. A prisoner who is not on this machine has a player id and no local slot.
+4. **Hiding your own body is a local-slot matter.** First-person cameras leave out the body of their own local
+   player, so the render layer for that is keyed by local slot (four layers, enough for one machine). A body
+   with no local slot (a remote prisoner) is drawn by every camera on this machine and needs no layer.
+5. **The maze is replicated by its events** (`cell_added`, `cell_removed`, `side_sealed`). It grows with the
+   lights, so it cannot be rebuilt from the seed alone. Each client is sent only the rooms its player can see
+   (that is `SightMap`).
+6. **Rules and monsters run on the host only.** The escape run, tag mode, the monster director and the item
+   scatter never run on a client; clients get state (keys held, who is it, where each monster stands) and show it.
+7. **A menu never pauses the world.** Online the world keeps running, so the pause menu is an overlay and the
+   host decides whether a local game pauses.
+8. **Time is the host's.** Anything that counts seconds (the start collapse, a web, a lamp, a Lurker's grace)
+   counts them on the host, from its physics ticks.
+
+## Split screen and online together
+
+A machine can host or join with up to four local players, alongside the remote players of other machines (for
+example two friends on one couch joined by twelve online, sixteen in all). So the roster of a running game is a
+list of prisoners, each with a player id and an input source; the prisoners whose source is *local* also have a
+local slot, a pane and a HUD on this machine, and the rest are remote bodies this machine only draws. The host
+runs the simulation for all sixteen whichever machine they sit at.

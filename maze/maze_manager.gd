@@ -101,6 +101,8 @@ func build(new_seed: int = 0) -> void:
 		start_collapse.delay = start_collapse_delay
 		add_child(start_collapse)
 		start_collapse.start(view, Vector2i.ZERO)
+	else:
+		_make_start_floor_safe()
 	maze_rebuilt.emit()
 
 
@@ -184,3 +186,14 @@ func _light_sources() -> Array:
 			"keep": node.get("keep_only") == true,
 		})
 	return sources
+
+
+## The start chamber's floor is cracked so it can give way, but only on the collapse's own clock: with no
+## collapse, standing on it must never break it.
+func _make_start_floor_safe() -> void:
+	var room := view.room_at(Vector2i.ZERO)
+	if room == null:
+		return
+	for tile in room.get_children():
+		if tile is CrackedFloor:
+			(tile as CrackedFloor).breaks_when_stood_on = false

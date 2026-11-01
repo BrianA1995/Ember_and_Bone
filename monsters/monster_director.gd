@@ -21,6 +21,8 @@ extends Node
 signal player_hit(monster: Monster, player: Player)
 
 @export var enabled := true
+## The start chamber is closed to monsters (see is_sanctuary). Tests that fight in it turn this off.
+@export var start_sanctuary := true
 @export_group("Pressure")
 ## Seconds after the run starts before the first monster.
 @export_range(0.0, 120.0, 1.0, "suffix:s") var grace_seconds := 10.0
@@ -295,7 +297,7 @@ func _spawn_cells() -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
 	for cell in grid.cells():
 		var data := grid.get_cell(cell)
-		if taken.has(cell) or RoomDefs.is_special(data.piece):
+		if taken.has(cell) or RoomDefs.is_special(data.piece) or is_sanctuary(cell):
 			continue
 		var nearest := _cells_to_nearest_player(cell)
 		if nearest >= spawn_min_cells and nearest <= spawn_max_cells:
@@ -369,7 +371,7 @@ func wrap_world(position: Vector3) -> Vector3:
 ## Can you walk from `cell` out through `side`? Both rooms must exist and be open to each other;
 ## a web across the doorway stops you unless `through_webs`.
 func can_pass(cell: Vector2i, side: int, through_webs := false) -> bool:
-	if not grid.is_open(cell, side):
+	if not grid.is_open(cell, side) or is_sanctuary(grid.neighbor(cell, side)):
 		return false
 	if not grid.is_open(grid.neighbor(cell, side), RoomDefs.opposite(side)):
 		return false
@@ -468,7 +470,7 @@ func can_hit(player: Player) -> bool:
 
 ## `monster` hits `player`: the candle goes out. Returns false (and does nothing) if they were hit lately.
 func hit(monster: Monster, player: Player) -> bool:
-	if not can_hit(player) or not is_lit(player, monster.cell):
+	if not can_hit(player) or not is_lit(player, monster.cell) or is_sanctuary(cell_at(player.global_position)):
 		return false
 	_immune[player] = hit_immunity
 	tension = maxf(tension - hit_relief, 0.0)
@@ -610,3 +612,12 @@ func _short(delta: float, span: float) -> float:
 		return delta
 	var d := fposmod(delta, span)
 	return d - span if d * 2.0 > span else d
+
+
+## Is `cell` part of the start chamber? Monsters are never placed there, never walk into it and cannot hit
+## anyone standing in it: it is the one safe place until the floor gives way.
+func is_sanctuary(cell: Vector2i) -> bool:
+	if not start_sanctuary:
+		return false
+	var start := grid.get_cell(Vector2i.ZERO)
+	return not start.is_empty() and start.piece == manager.start_piece and grid.room_cells(Vector2i.ZERO).has(grid.wrap_cell(cell))

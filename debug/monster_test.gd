@@ -16,6 +16,7 @@ var _manager: MazeManager
 func _ready() -> void:
 	GameSettings.monsters = true
 	await _start(1)
+	await _sanctuary()
 	await _lurker()
 	await _sight_and_limits()
 	await _thief()
@@ -47,13 +48,21 @@ func _start(players: int) -> void:
 	GameInput.configure(players)
 	_game = (load("res://game/game.tscn") as PackedScene).instantiate() as LocalGame
 	# The start room would collapse after half a minute and take the test's footing with it.
-	(_game.get_node("MazeManager") as MazeManager).start_collapse_delay = 0.0
+	var maze := _game.get_node("MazeManager") as MazeManager
+	maze.start_collapse_delay = 0.0
+	# Cracked floors have their own test; here one beside the start room can drop the player mid-check.
+	maze.crack_chance = 0.0
+	# MAZE_SEED=<n> replays a maze (the seed of a failing run is printed below); otherwise each run is a new one.
+	maze.map_seed = OS.get_environment("MAZE_SEED").to_int()
 	add_child(_game)
 	await _wait(0.5)
 	_escape = _game.escape
+	print("  (maze seed %d)" % maze.grid.seed_value)
 	_manager = _game.get_node("MazeManager")
 	_director = _game.get_node("MonsterDirector")
 	_director.enabled = false
+	# The tests fight in the start room, which is a sanctuary in the real game (_sanctuary checks that).
+	_director.start_sanctuary = false
 
 
 ## A monster that stands still until the test acts for it.
@@ -61,6 +70,30 @@ func _spawn(kind: StringName, cell: Vector2i) -> Monster:
 	var monster := _director.spawn(kind, cell)
 	monster.set_physics_process(false)
 	return monster
+
+
+func _sanctuary() -> void:
+	print("-- start chamber is safe")
+	var player := _game.players[0]
+	var here := _director.cell_at(player.global_position)
+	_director.start_sanctuary = true
+	_check("the start chamber is a sanctuary", _director.is_sanctuary(here), "")
+	var thief := _spawn(&"thief", here) as Thief
+	_director._immune.clear()
+	_check("a monster cannot hit a prisoner standing in it", not _director.hit(thief, player), "")
+	var walked_in := false
+	for side in RoomDefs.SIDE_COUNT:
+		var outside: Vector2i = _director.grid.neighbor(here, side)
+		if not _director.is_sanctuary(outside) and _director.can_pass(outside, RoomDefs.opposite(side)):
+			walked_in = true
+	_check("and none can walk into it", not walked_in, "")
+	_check("none is placed in it", not _director._spawn_cells().has(here), "")
+	_director.start_sanctuary = false
+	_director._immune.clear()
+	_check("(with the sanctuary off, the same hit lands)", _director.hit(thief, player), "")
+	_director._immune.clear()
+	thief.queue_free()
+	await _wait(0.1)
 
 
 func _lurker() -> void:
@@ -266,9 +299,11 @@ func _rules() -> void:
 	await _wait(1.0)
 	var here := _director.cell_at(player.global_position)
 	var found := _director.reachable(here, 4)
+	# The farthest room the prisoner cannot see (a dead end near the start may leave none within two doorways).
 	var far := here
+	var seen: Dictionary = _director.sight.cells_for(player)
 	for cell in found:
-		if found[cell].steps > found[far].steps and found[cell].steps >= 2:
+		if not seen.has(cell) and found[cell].steps > found[far].steps:
 			far = cell
 	var web := Web.new()
 	_check("a web lasts about ten seconds", is_equal_approx(web.lifetime, 10.0), "%.1f" % web.lifetime)

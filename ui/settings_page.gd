@@ -1,16 +1,17 @@
 class_name SettingsPage
-extends VBoxContainer
+extends MenuPage
 ## The settings screen: display, audio, controls, maze. Reads and writes GameSettings, so it
 ## works the same from the main menu and the pause menu. Changes apply at once and are saved
 ## when the page is left. The controller page and the button map open inside it; `go_back()` steps out of
 ## whichever page is showing.
 
-signal back_pressed
 
 const MODE_NAMES := ["Windowed", "Fullscreen (borderless)", "Fullscreen (exclusive)"]
 const SPLIT_NAMES := ["Side by side", "Stacked"]
 ## In the order of CameraRig.Mode.
 const VIEW_NAMES := ["Top down", "Third person", "First person"]
+## Height, in pixels, of everything in the menu panel that is not the settings list.
+const MENU_CHROME := 480.0
 
 ## The camera rig of each player in the running game, in slot order, for choosing their views; empty in the
 ## main menu, where there is no game. Set it before the page is shown.
@@ -97,7 +98,8 @@ func _ready() -> void:
 
 ## Makes the list as tall as it needs to be, or as tall as the window allows.
 func _fit_scroll() -> void:
-	var room := get_viewport_rect().size.y - 230.0
+	# What is above and below the list in the menu panel (its margins, the title, the page heading, the buttons).
+	var room := get_viewport_rect().size.y - MENU_CHROME
 	_scroll.custom_minimum_size = Vector2(0.0, clampf(_list.get_combined_minimum_size().y, 120.0, maxf(room, 120.0)))
 
 
