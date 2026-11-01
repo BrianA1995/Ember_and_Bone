@@ -15,6 +15,7 @@ var _game: LocalGame
 var _escape: EscapeRun
 var _manager: MazeManager
 var _director: MonsterDirector
+var _shrines: WaxShrines
 var _player: Player
 var _rig: CameraRig
 var _log: FileAccess
@@ -53,6 +54,8 @@ func _ready() -> void:
 	GameSettings.monsters = true
 	GameSettings.game_mode = GameSettings.GameMode.ESCAPE
 	GameSettings.player_count = 1
+	# A short candle, so every run has to find a wax shrine or a spare candle.
+	GameSettings.candle_minutes = 4
 	GameInput.configure(1)
 	_game = (load("res://game/game.tscn") as PackedScene).instantiate() as LocalGame
 	add_child(_game)
@@ -60,6 +63,7 @@ func _ready() -> void:
 	_escape = _game.escape
 	_manager = _game.get_node("MazeManager")
 	_director = _game.get_node("MonsterDirector")
+	_shrines = _game.get_node("WaxShrines")
 	_player = _game.players[0]
 	_rig = _game.rigs[0]
 	_last_position = _player.global_position
@@ -81,10 +85,12 @@ func _ready() -> void:
 	_escape.key_taken.connect(func(_slot: int) -> void:
 		_stats.keys += 1
 		_say("TOOK A KEY (%d of %d)" % [_escape.keys_held[0], _escape.keys_per_prisoner]))
+	_player.burned_out.connect(func() -> void: _say("the candle BURNED DOWN"))
+	_shrines.shrine_used.connect(func(cell: Vector2i, _who: Array) -> void: _say("filled the candle at the shrine in %s" % cell))
 	_escape.run_won.connect(func(_escaped: Array) -> void: _finish("WON the run"))
 	_escape.run_lost.connect(func(reason: String) -> void: _finish("LOST the run: " + reason))
 	Engine.time_scale = speed
-	_say("start: maze %d, keys needed %d, gates %d" % [GameSettings.maze_size, _escape.keys_required(), _escape.gates_total])
+	_say("start: maze %d, keys needed %d, gates %d, candle %d min" % [GameSettings.maze_size, _escape.keys_required(), _escape.gates_total, GameSettings.candle_minutes])
 
 
 func _say(text: String) -> void:
@@ -232,7 +238,12 @@ func _watch_monsters() -> void:
 # --- The dark -----------------------------------------------------------------------------
 
 func _handle_dark(delta: float) -> void:
-	if not _player.is_snuffed():
+	# At a shrine with the candle low, hold the button at the altar.
+	if _shrines.has_shrine(_cell_of(_player.global_position)) and _player.wax.fraction() < 0.7:
+		_press(&"interact")
+		return
+	var burnt := _player.is_burnt_out()
+	if not _player.is_snuffed() and not burnt:
 		_match_hold = 0.0
 		if _escape.equipped[0] != 0 and _escape.held_item(0).kind in [&"matches", &"spare_candle"]:
 			_escape.equipped[0] = 0
@@ -240,7 +251,7 @@ func _handle_dark(delta: float) -> void:
 		return
 	var list := _escape.hand_items(0)
 	for i in list.size():
-		if list[i].kind == &"matches" or list[i].kind == &"spare_candle":
+		if list[i].kind == &"spare_candle" or (list[i].kind == &"matches" and not burnt):
 			_escape.equipped[0] = i
 			if list[i].kind == &"matches":
 				_press(&"interact")
@@ -405,6 +416,15 @@ func _through_door(from: Vector2i, step: Vector2i) -> Vector3:
 
 
 func _explore(cell: Vector2i) -> Variant:
+	# A candle running low: make for a shrine that can be reached, and stay at the altar until the candle is full.
+	var shrine: Variant = _shrine_to_seek(cell)
+	if shrine != null:
+		if cell == shrine:
+			return RoomDefs.cell_to_world(cell)
+		if _goal != shrine:
+			_say("candle low (%.0f%%): heading for the shrine in %s" % [_player.wax.fraction() * 100.0, shrine])
+		_goal = shrine
+		_goal_until = _clock + 20.0
 	if _goal == Vector2i(-9999, -9999) or _clock > _goal_until or cell == _goal or not _manager.grid.has_cell(_goal):
 		var found := _director.reachable(cell, 12)
 		var best := cell
@@ -425,3 +445,17 @@ func _explore(cell: Vector2i) -> Variant:
 		_goal = Vector2i(-9999, -9999)
 		return RoomDefs.cell_to_world(cell)
 	return _through_door(cell, step)
+
+
+## The nearest unused shrine within reach when the candle is under 45% (or burnt out), or null.
+func _shrine_to_seek(cell: Vector2i) -> Variant:
+	if _player.wax.is_endless() or _player.wax.fraction() >= 0.45:
+		return null
+	var found := _director.reachable(cell, 14)
+	var best: Variant = null
+	var best_steps := 999
+	for shrine in _shrines._shrines:
+		if _shrines.has_shrine(shrine) and found.has(shrine) and found[shrine].steps < best_steps:
+			best = shrine
+			best_steps = found[shrine].steps
+	return best
