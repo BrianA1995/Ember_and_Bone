@@ -369,9 +369,9 @@ func wrap_world(position: Vector3) -> Vector3:
 
 
 ## Can you walk from `cell` out through `side`? Both rooms must exist and be open to each other;
-## a web across the doorway stops you unless `through_webs`.
+## a web across the doorway stops you unless `through_webs`. Nothing walks into the start chamber from outside.
 func can_pass(cell: Vector2i, side: int, through_webs := false) -> bool:
-	if not grid.is_open(cell, side) or is_sanctuary(grid.neighbor(cell, side)):
+	if not grid.is_open(cell, side) or (is_sanctuary(grid.neighbor(cell, side)) and not is_sanctuary(cell)):
 		return false
 	if not grid.is_open(grid.neighbor(cell, side), RoomDefs.opposite(side)):
 		return false
