@@ -43,7 +43,6 @@ const PIECES := {
 			"special": true, "cracked": true},
 	&"wax_shrine": {"scene": "res://rooms/wax_shrine.tscn", "mask": 0b0100, "weight": 0.06, "special": true},
 	&"safe_niche": {"scene": "res://rooms/safe_niche.tscn", "mask": 0b0100, "weight": 0.06, "special": true},
-	&"monster_nest": {"scene": "res://rooms/monster_nest.tscn", "mask": 0b0101, "weight": 0.15, "special": true},
 	# Gate chamber: 2 x 2 cells, one doorway on the south side of the bottom-left cell.
 	&"gate_chamber": {"scene": "res://rooms/gate_chamber.tscn", "mask": 0b0110, "weight": 0.03, "special": true,
 			"cells": {

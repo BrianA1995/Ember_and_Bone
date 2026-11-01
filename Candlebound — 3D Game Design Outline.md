@@ -69,7 +69,7 @@ The labyrinth is a large hidden grid (about 41×41 cells of 4 m each for 8 playe
 | Key alcove | Holds one key; floor collapses a few seconds after the key is taken |
 | Gate chamber | Large room where the group escapes; unlimited capacity |
 | Wax shrine | Refills candles once, then goes dark |
-| Monster nest | Spawns a monster when lit; marked by scratches |
+| ~~Monster nest~~ | Cut: monsters spawn from the Director instead |
 | Safe niche | Small side pocket monsters won't enter while your flame is lit |
 
 **Hard limits:** the grid has an outer wall, so the maze is finite; the number of keys and gates per run is fixed at start (see Keys) so the generator can't starve the players.
@@ -134,7 +134,7 @@ The labyrinth is infested. Monsters roam the generated corridors in real time, c
 
 **Rules every monster follows**
 
-- Monsters can only travel on existing corridors. When the cells they stand on collapse, they fall and are gone for good (respawning later from a nest).
+- Monsters can only travel on existing corridors. When the cells they stand on collapse, they fall and are gone for good (the Director sends others later).
 - Raising your flame stuns a monster facing you for 2 s.
 - A monster hit: the prisoner drops all keys on the spot (teammates can pick them up within 20 s) and enters Lights Out. A hit while already in Lights Out kills.
 

@@ -81,6 +81,8 @@ var sight: SightMap
 ## Called as snuffed_hint.call(player) -> String for what a snuffed prisoner can do ("{interact}" is
 ## replaced by the button's name); set by whoever knows how a candle is lit again.
 var snuffed_hint := Callable()
+## What a prisoner can do where they stand (a wax shrine's altar): called as place_hint.call(player) -> String.
+var place_hint := Callable()
 ## The items the prisoners carry (keys share its slots); set by whoever deals items.
 var bag: ItemBag
 ## Called as use_hint.call(player, held_kind) -> String for what the item in hand does ("" for nothing).
@@ -283,6 +285,10 @@ func prompt(slot: int) -> String:
 		lines.append("%s: put down" % _button_name(slot, &"drop_item"))
 	if hand_items(slot).size() > 1:
 		lines.append("%s: next item" % _button_name(slot, &"cycle_item"))
+	if place_hint.is_valid():
+		var here: String = place_hint.call(player)
+		if here != "":
+			lines.append(here.replace("{interact}", _button_name(slot, &"interact")))
 	# A candle that is out stays out whatever is in hand, so the way to light it again goes with the item hints.
 	if player.is_snuffed() or player.is_burnt_out():
 		var text: String = snuffed_hint.call(player) if snuffed_hint.is_valid() else "Your candle is out: hold {interact} beside a lit candle"

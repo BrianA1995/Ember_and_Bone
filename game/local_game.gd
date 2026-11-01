@@ -156,6 +156,7 @@ func _add_escape() -> void:
 	gate.setup(sight, maze)
 	_add_items()
 	_add_relighting()
+	_add_wax_shrines()
 	if GameSettings.monsters:
 		_add_monsters()
 
@@ -185,6 +186,15 @@ func _add_relighting() -> void:
 	add_child(relighting)
 	relighting.setup(players, $ItemBag as ItemBag)
 	escape.snuffed_hint = relighting.hint
+
+
+## Wax shrines, where a candle is filled once (none when the candle never burns down).
+func _add_wax_shrines() -> void:
+	var shrines := WaxShrines.new()
+	shrines.name = "WaxShrines"
+	add_child(shrines)
+	shrines.setup(players, maze)
+	escape.place_hint = shrines.hint
 
 
 ## The monsters.
