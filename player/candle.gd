@@ -9,6 +9,10 @@ extends Node3D
 
 ## How high the flame's centre sits above the wick, in metres.
 const FLAME_HEIGHT := 0.05
+## The stick's height when new, and the share of it that is left when the flame starts to gutter.
+const STICK_HEIGHT := 0.26
+const STUB_SHARE := 0.2
+const LOW_WAX := 0.25
 
 ## How far the light carries, in cells (1 = the next room along each corridor).
 @export var reach_cells := 1.0:
@@ -30,6 +34,11 @@ var _lean_speed := 6.0
 
 var _light: OmniLight3D
 var _flame: MeshInstance3D
+## The wax stick, and how much of it is left (1 full, 0 a stub): it shortens, and the flame flutters and burns lower
+## as it runs out. Everyone who sees the candle sees this.
+var _stick: MeshInstance3D
+var _wax_left := 1.0
+
 var _noise := FastNoiseLite.new()
 var _time := randf() * 100.0
 
@@ -42,9 +51,11 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	_time += delta * flicker_speed
+	# Low wax: the flame flutters faster and burns lower.
+	var low := 1.0 - clampf(_wax_left / LOW_WAX, 0.0, 1.0)
+	_time += delta * flicker_speed * (1.0 + low * 1.5)
 	var flicker := _noise.get_noise_1d(_time * 10.0)
-	_light.light_energy = energy * (1.0 + flicker * flicker_amount * 2.0)
+	_light.light_energy = energy * lerpf(1.0, 0.55, low) * (1.0 + flicker * flicker_amount * (2.0 + low * 3.0))
 	_light.position.x = flicker * 0.012
 	_lean = _lean.lerp(_lean_goal, 1.0 - exp(-_lean_speed * delta))
 	_shape_flame(Vector3(1.0 - flicker * 0.08, 1.0 + flicker * 0.3, 1.0 - flicker * 0.08))
@@ -76,6 +87,15 @@ func _shape_flame(flicker: Vector3) -> void:
 	# A leaning flame is also longer, as if blown.
 	var stretch := Vector3(1.0, 1.0 + angle * 0.3, 1.0)
 	_flame.transform = Transform3D(tilt * Basis.from_scale(flicker * stretch), tilt * Vector3(0.0, FLAME_HEIGHT, 0.0))
+
+
+## How much wax is left, 0 to 1: the stick is shorter for less.
+func set_wax(fraction: float) -> void:
+	_wax_left = clampf(fraction, 0.0, 1.0)
+	if _stick:
+		var height := STICK_HEIGHT * lerpf(STUB_SHARE, 1.0, _wax_left)
+		(_stick.mesh as CylinderMesh).height = height
+		_stick.position.y = -height * 0.5
 
 
 ## Lights the candle, or puts it away / snuffs it: out of sight and no light.
@@ -124,14 +144,16 @@ func _build_stick() -> void:
 	var mesh := CylinderMesh.new()
 	mesh.top_radius = 0.032
 	mesh.bottom_radius = 0.038
-	mesh.height = 0.26
+	mesh.height = STICK_HEIGHT
 	wax.mesh = mesh
-	wax.position.y = -0.13
+	wax.position.y = -STICK_HEIGHT * 0.5
 	var material := StandardMaterial3D.new()
 	material.albedo_color = Color(0.92, 0.86, 0.72)
 	material.roughness = 0.9
 	wax.material_override = material
 	add_child(wax)
+	_stick = wax
+	set_wax(_wax_left)
 
 
 func _build_flame() -> void:

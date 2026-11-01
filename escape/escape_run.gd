@@ -218,6 +218,8 @@ func restart() -> void:
 	for i in players.size():
 		keys_held.append(0)
 		equipped.append(0)
+		# A fresh candle for a fresh run (the setup chooses how long it burns; 0 never).
+		players[i].set_wax_life(GameSettings.candle_minutes * 60.0)
 	elapsed = 0.0
 	finished = false
 	unlock_progress = 0.0
@@ -281,8 +283,8 @@ func prompt(slot: int) -> String:
 		lines.append("%s: put down" % _button_name(slot, &"drop_item"))
 	if hand_items(slot).size() > 1:
 		lines.append("%s: next item" % _button_name(slot, &"cycle_item"))
-	# A snuffed candle is out whatever is in hand, so the way to light it again goes with the item's hints.
-	if player.is_snuffed():
+	# A candle that is out stays out whatever is in hand, so the way to light it again goes with the item hints.
+	if player.is_snuffed() or player.is_burnt_out():
 		var text: String = snuffed_hint.call(player) if snuffed_hint.is_valid() else "Your candle is out: hold {interact} beside a lit candle"
 		lines.append(text.replace("{interact}", _button_name(slot, &"interact")))
 	return "\n".join(lines)

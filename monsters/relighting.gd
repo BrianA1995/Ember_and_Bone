@@ -4,6 +4,8 @@ extends Node
 ##  - beside a teammate whose candle burns: hold it and take a light from theirs (free);
 ##  - otherwise with matches: hold it while a match is struck (uses one up);
 ##  - otherwise with a spare candle: press it and the spare is lit in place of yours (uses it up).
+## A candle that has burned down (see Wax) is another matter: matches and a teammate's light cannot help, only a spare
+## candle (here) or a wax shrine (see WaxShrines).
 ## Hearth rooms will be another way. `fallback_seconds` is a last resort for testing: 0 turns it off.
 
 ## How near, in metres, a lit candle has to be.
@@ -12,6 +14,8 @@ extends Node
 @export_range(0.2, 10.0, 0.1, "suffix:s") var hold_seconds := 1.5
 ## Seconds the button is held to strike a match.
 @export_range(0.2, 10.0, 0.1, "suffix:s") var match_seconds := 1.0
+## How much of a full candle a spare candle gives a candle that has burned down (1 is a whole new one).
+@export_range(0.1, 1.0, 0.05) var spare_candle_wax := 1.0
 ## Seconds after which a snuffed candle lights itself whatever happens. 0 is never.
 @export_range(0.0, 300.0, 1.0, "suffix:s") var fallback_seconds := 0.0
 
@@ -30,6 +34,11 @@ func setup(p_players: Array[Player], p_bag: ItemBag = null) -> void:
 
 func _physics_process(delta: float) -> void:
 	for player in players:
+		if player.is_burnt_out():
+			_held.erase(player)
+			_dark.erase(player)
+			_new_candle(player)
+			continue
 		if not player.is_snuffed():
 			_held.erase(player)
 			_dark.erase(player)
@@ -43,6 +52,10 @@ func _physics_process(delta: float) -> void:
 
 ## What the prisoner can do now to get a light, with the button named {interact}.
 func hint(player: Player) -> String:
+	if player.is_burnt_out():
+		if bag and bag.count(player.slot, &"spare_candle") > 0:
+			return "{interact}: light your spare candle"
+		return "Your candle has burned down: find a wax shrine or a spare candle"
 	if _light_near(player):
 		return "Hold {interact}: take a light from your teammate"
 	if bag and bag.count(player.slot, &"matches") > 0:
@@ -72,6 +85,13 @@ func _ask(player: Player, delta: float) -> void:
 	if _held[player] >= needed and (spend == &"" or bag.take(player.slot, spend)):
 		_held[player] = 0.0
 		player.relight()
+
+
+## A candle that has burned down cannot be lit again, only replaced: a spare candle is pressed into its place.
+func _new_candle(player: Player) -> void:
+	var button := GameInput.action(player.slot, &"interact")
+	if bag and Input.is_action_just_pressed(button) and bag.take(player.slot, &"spare_candle"):
+		player.refill(spare_candle_wax)
 
 
 ## Is a teammate with a burning candle within reach?

@@ -14,6 +14,8 @@ signal fell
 ## The candle was snuffed out (by a monster), and was lit again.
 signal snuffed
 signal relit
+## The candle burned down to nothing (see Wax). Only a refill (a wax shrine, a spare candle) lights it again.
+signal burned_out
 
 ## Which local player this is (0-3). Picks the input actions (see GameInput) and the body colour.
 @export var slot := 0
@@ -42,6 +44,14 @@ signal relit
 @export var raise_speed := 6.0
 ## Where the middle of the candle's collision box sits below the wick.
 @export var candle_box_drop := 0.07
+
+@export_group("Wax")
+## How fast the wax goes while the flame is raised in front of the face, and while the candle is put away in the
+## hand (1 is plain burning). A blown-out candle does not burn.
+@export var raised_burn := 3.0
+@export var put_away_burn := 0.5
+## What a prisoner whose candle has burned down can still do: walk at this share of their speed, never sprint.
+@export_range(0.2, 1.0, 0.05) var burnt_out_speed := 0.75
 
 @export_group("Falling")
 ## Downward acceleration once the floor is gone, in m/s².
@@ -111,6 +121,10 @@ var _slow_left := 0.0
 ## True from the moment a monster snuffs the candle until it is lit again (see relight).
 var _snuffed := false
 
+## How much of the candle is left; EscapeRun sets its length (set_wax_life) from the game setup.
+var wax := Wax.new()
+var _burnt_out := false
+
 @onready var _visual: Node3D = $Visual
 @onready var _candle: Candle = $Candle
 @onready var _candle_box: CollisionShape3D = $CandleCollision
@@ -139,12 +153,14 @@ func _ready() -> void:
 	if _candle.light_range() + 0.5 > light_radius * RoomDefs.CELL_SIZE:
 		push_warning("Player: the candle's light reaches rooms that can still change; raise dark_margin")
 	_build_sight()
+	wax.burned_out.connect(_on_burned_out)
 
 
 func _physics_process(delta: float) -> void:
 	if _slow_left > 0.0:
 		_slow_left -= delta
 	_hold_candle()
+	_burn(delta)
 	if _falling:
 		_fall(delta)
 	else:
@@ -184,8 +200,8 @@ func warp_to(position: Vector3) -> void:
 func _walk(delta: float) -> void:
 	var input := Vector2.ZERO if controls_locked else Input.get_vector(GameInput.action(slot, &"move_left"),
 			GameInput.action(slot, &"move_right"), GameInput.action(slot, &"move_forward"), GameInput.action(slot, &"move_back"))
-	var sprinting := Input.is_action_pressed(GameInput.action(slot, &"sprint")) and not is_slowed()
-	var speed := (sprint_speed if sprinting else walk_speed) * speed_scale()
+	var sprinting := Input.is_action_pressed(GameInput.action(slot, &"sprint")) and not is_slowed() and not _burnt_out
+	var speed := (sprint_speed if sprinting else walk_speed) * speed_scale() * (burnt_out_speed if _burnt_out else 1.0)
 	var facing := rig.movement_basis if rig else Basis.IDENTITY
 	var direction := facing * Vector3(input.x, 0.0, input.y)
 	velocity = direction * speed
@@ -302,7 +318,7 @@ func flame_lean() -> float:
 ## (`light_radius` does not change) but only what the player sees shrinks, to the room they stand in, by
 ## a dim grey light. The rooms beyond that are no longer seen, so they change at once, out of sight.
 func set_candle_lit(on: bool) -> void:
-	on = on and not _snuffed
+	on = on and not _snuffed and not _burnt_out
 	if on == _candle.lit:
 		return
 	_candle.set_lit(on)
@@ -363,6 +379,35 @@ func is_snuffed() -> bool:
 	return _snuffed
 
 
+## The player puts the candle out themselves, to save the wax. It is out like a snuffed one (a teammate's light or a
+## match lights it again) but nothing took it from them.
+func blow_out() -> void:
+	if _candle.lit:
+		snuff()
+
+
+## A new candle that lasts `seconds` (0: it never burns down).
+func set_wax_life(seconds: float) -> void:
+	wax.set_life(seconds)
+	_burnt_out = false
+	_candle.set_wax(1.0)
+
+
+## More wax, up to `fraction` of a full candle. A candle that had burned down, or been put out, is lit again.
+func refill(fraction := 1.0) -> void:
+	wax.fill(fraction)
+	_candle.set_wax(wax.fraction())
+	var was_out := _burnt_out or _snuffed
+	_burnt_out = false
+	_snuffed = false
+	if was_out:
+		relit.emit()
+
+
+func is_burnt_out() -> bool:
+	return _burnt_out
+
+
 ## Is the flame held up in front of the face (the hold-flame button is down and the candle burns)?
 func flame_raised() -> bool:
 	return _raise > 0.8 and _candle.lit
@@ -385,6 +430,23 @@ func candle_position() -> Vector3:
 
 func candle_range() -> float:
 	return _candle.light_range()
+
+
+## Burns wax for this tick: plain while the flame is held, faster raised, slower put away in the hand, not at all out.
+func _burn(delta: float) -> void:
+	if _snuffed or _burnt_out or wax.is_endless():
+		return
+	var rate := put_away_burn
+	if _candle.lit:
+		rate = raised_burn if flame_raised() else 1.0
+	wax.burn(delta * rate)
+	_candle.set_wax(wax.fraction())
+
+
+func _on_burned_out() -> void:
+	_burnt_out = true
+	set_candle_lit(false)
+	burned_out.emit()
 
 
 func _build_sight() -> void:

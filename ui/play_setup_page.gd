@@ -10,6 +10,7 @@ const MODE_NAMES := ["Freeplay", "Tag (last one standing)", "Endless tag", "Esca
 var _mode := Stepper.new()
 var _players := Stepper.new()
 var _points := Stepper.new()
+var _candle := Stepper.new()
 var _grace := CheckButton.new()
 
 
@@ -21,6 +22,8 @@ func _ready() -> void:
 	add_child(_mode)
 	add_child(_players)
 	add_child(_points)
+	_candle.stepped.connect(_change_candle)
+	add_child(_candle)
 	_grace.text = "Last gate lingers (20 s)"
 	_grace.toggled.connect(func(on: bool) -> void:
 		GameSettings.gate_grace = on
@@ -38,6 +41,8 @@ func refresh() -> void:
 	_players.set_text("%d player%s" % [count, "" if count == 1 else "s"])
 	_mode.set_text("Mode: %s" % MODE_NAMES[GameSettings.game_mode])
 	_points.visible = GameSettings.is_tag_mode()
+	_candle.visible = GameSettings.game_mode == GameSettings.GameMode.ESCAPE
+	_candle.set_text("Candle: %s" % ("never burns down" if GameSettings.candle_minutes == 0 else "%d min" % GameSettings.candle_minutes))
 	_grace.visible = GameSettings.game_mode == GameSettings.GameMode.ESCAPE
 	_grace.set_pressed_no_signal(GameSettings.gate_grace)
 	_points.set_text("%d points each" % GameSettings.tag_points)
@@ -63,3 +68,10 @@ func _change_points(step: int) -> void:
 func _save() -> void:
 	GameSettings.save_settings()
 	refresh()
+
+
+func _change_candle(step: int) -> void:
+	var choices := GameSettings.CANDLE_CHOICES
+	var at := clampi(choices.find(GameSettings.candle_minutes) + step, 0, choices.size() - 1)
+	GameSettings.candle_minutes = choices[at]
+	_save()

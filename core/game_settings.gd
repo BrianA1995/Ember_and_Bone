@@ -15,6 +15,8 @@ enum GameMode { FREEPLAY, TAG, ENDLESS_TAG, ESCAPE }
 const TAG_MIN_PLAYERS := 2
 const TAG_POINTS_MIN := 10
 const TAG_POINTS_MAX := 600
+## Minutes a candle burns in an escape run, as offered in the game setup; 0 is a candle that never burns down.
+const CANDLE_CHOICES: Array[int] = [3, 5, 8, 10, 15, 20, 30, 0]
 const MAZE_MIN := 20
 const MAZE_MAX := 100
 const SAVE_PATH := "user://settings.cfg"
@@ -52,6 +54,8 @@ var game_mode := GameMode.FREEPLAY
 var tag_points := 100
 ## Escape: the last gate left stays up for a while after its light goes (see EscapeRun.last_gate_grace).
 var gate_grace := false
+## Escape: minutes a candle burns before it goes out for good (see Wax and CANDLE_CHOICES); 0 never. Not shown in a run: the candle itself shows it.
+var candle_minutes := 10
 ## Whether an escape run has monsters. Not saved; off in a headless run so tests stay quiet unless they ask.
 var monsters := DisplayServer.get_name() != "headless"
 ## The debug map of the whole maze (M toggles it).
@@ -182,6 +186,8 @@ func load_settings() -> void:
 	player_count = clampi(player_count, 1, GameInput.SLOTS)
 	maze_size = clampi(maze_size, MAZE_MIN, MAZE_MAX)
 	tag_points = clampi(tag_points, TAG_POINTS_MIN, TAG_POINTS_MAX)
+	if not CANDLE_CHOICES.has(candle_minutes):
+		candle_minutes = 10
 	enforce_mode_rules()
 	if controllers.size() != GameInput.SLOTS:
 		controllers = GameInput.DEFAULT_DEVICES.duplicate()
@@ -190,4 +196,4 @@ func load_settings() -> void:
 func _keys() -> Array[String]:
 	return ["window_mode", "resolution", "vsync", "master_volume", "mouse_sensitivity",
 			"field_of_view", "split_style", "show_debug", "player_count", "maze_size", "show_map",
-			"controllers", "game_mode", "tag_points", "start_view", "gate_grace"]
+			"controllers", "game_mode", "tag_points", "start_view", "gate_grace", "candle_minutes"]

@@ -6,6 +6,7 @@ extends Node
 ##  - chalk: choose a message and write it on the wall (ChalkMarks, MessagePicker);
 ##  - walkie-talkie: choose a message and every teammate hears it;
 ##  - drop: a key or a stack of items is put down in front of you and can be picked up again after a moment.
+##  - candle, raised in front of the face (hold the flame button): blow it out, to save the wax.
 ## Matches and the spare candle are used by Relighting (with the interact button, when the candle is out).
 
 ## How far in front of the prisoner a dropped thing lands, in metres.
@@ -50,6 +51,8 @@ func hint(player: Player, kind: StringName) -> String:
 		&"candle":
 			if _tied_string(player) != null:
 				return "{use}: tie off the string"
+			if player.flame_raised():
+				return "{use}: blow out the candle (saves the wax)"
 		&"lamp":
 			return "{use}: set the lamp down"
 		&"string":
@@ -75,6 +78,11 @@ func _use(player: Player) -> void:
 	var held := escape.held_item(player.slot)
 	if held.type == &"candle" and _tied_string(player) != null:
 		_tied_string(player).tie_off()
+		return
+	if held.type == &"candle":
+		# The flame held up in front of the face can be blown out, to save the wax.
+		if player.flame_raised():
+			player.blow_out()
 		return
 	if held.type != &"item":
 		return

@@ -155,6 +155,7 @@ func _add_escape() -> void:
 	add_child(gate)
 	gate.setup(sight, maze)
 	_add_items()
+	_add_relighting()
 	if GameSettings.monsters:
 		_add_monsters()
 
@@ -177,7 +178,16 @@ func _add_items() -> void:
 	use.setup(players, escape, bag, scatter, maze)
 
 
-## The monsters, and the ways to get a snuffed candle lit again.
+## The ways to get a candle that is out lit again (a candle can go out with no monsters about: it burns down).
+func _add_relighting() -> void:
+	var relighting := Relighting.new()
+	relighting.name = "Relighting"
+	add_child(relighting)
+	relighting.setup(players, $ItemBag as ItemBag)
+	escape.snuffed_hint = relighting.hint
+
+
+## The monsters.
 func _add_monsters() -> void:
 	var director := MonsterDirector.new()
 	director.name = "MonsterDirector"
@@ -186,11 +196,6 @@ func _add_monsters() -> void:
 	director.pursuit = $Pursuit
 	director.sight = sight
 	director.setup(players, maze, escape)
-	var relighting := Relighting.new()
-	relighting.name = "Relighting"
-	add_child(relighting)
-	relighting.setup(players, $ItemBag as ItemBag)
-	escape.snuffed_hint = relighting.hint
 
 
 func _show_run_results(title: String, reason: String, run: EscapeRun) -> void:

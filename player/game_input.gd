@@ -52,8 +52,8 @@ static func keyboard_map() -> Array[Dictionary]:
 	var rows: Array[Dictionary] = []
 	var names := {
 		&"move_forward": "Move forward", &"move_back": "Move back", &"move_left": "Move left", &"move_right": "Move right",
-		&"sprint": "Sprint", &"interact": "Interact: take a key, light a candle", &"hold_flame": "Raise the flame / hold a key out",
-		&"cycle_item": "Switch item", &"use_item": "Use the item in hand", &"drop_item": "Drop the item in hand",
+		&"sprint": "Sprint", &"interact": "Interact: take a key, light a candle, use a wax shrine", &"hold_flame": "Raise the flame / hold a key out",
+		&"cycle_item": "Switch item", &"use_item": "Use the item in hand (raised flame: blow it out)", &"drop_item": "Drop the item in hand",
 		&"camera_cycle": "Change view", &"camera_top": "Top view", &"camera_third": "Third person", &"camera_first": "First person",
 	}
 	for base in names:
