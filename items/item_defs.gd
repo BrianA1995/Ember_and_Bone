@@ -10,7 +10,7 @@ const ITEMS := {
 	&"matches": {"label": "Matches", "gives": 3, "per_slot": 3, "cap": 6, "color": Color(0.85, 0.25, 0.15)},
 	&"spare_candle": {"label": "Spare candle", "gives": 1, "per_slot": 1, "cap": 2, "color": Color(0.92, 0.9, 0.8)},
 	&"lamp": {"label": "Lamp", "gives": 1, "per_slot": 1, "cap": 2, "color": Color(1.0, 0.8, 0.35)},
-	&"string": {"label": "String", "gives": 1, "per_slot": 1, "cap": 2, "color": Color(0.8, 0.7, 0.5)},
+	&"string": {"label": "String", "letter": "T", "gives": 1, "per_slot": 1, "cap": 2, "color": Color(0.8, 0.7, 0.5)},
 	&"chalk": {"label": "Chalk", "gives": 6, "per_slot": 6, "cap": 12, "color": Color(0.95, 0.95, 0.95)},
 	&"walkie": {"label": "Walkie-talkie", "gives": 1, "per_slot": 1, "cap": 1, "color": Color(0.45, 0.5, 0.45)},
 	&"pouch": {"label": "Pouch", "gives": 1, "per_slot": 1, "cap": 2, "color": Color(0.5, 0.33, 0.2), "no_slot": true},
@@ -19,6 +19,11 @@ const ITEMS := {
 
 static func label(kind: StringName) -> String:
 	return ITEMS[kind].label
+
+
+## The letter on its inventory icon: the first of its name unless `letter` says otherwise (two items must differ).
+static func letter(kind: StringName) -> String:
+	return ITEMS[kind].get("letter", label(kind).substr(0, 1))
 
 
 ## Does this item take a slot (everything but the pouch)?

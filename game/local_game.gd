@@ -22,6 +22,8 @@ var tag: TagMode
 var escape: EscapeRun
 var players: Array[Player] = []
 var rigs: Array[CameraRig] = []
+## What each prisoner can see, worked out once and shared by everything that asks.
+var sight: SightMap
 
 var _debug_layer: CanvasLayer
 var _map_layer: CanvasLayer
@@ -44,6 +46,10 @@ func _ready() -> void:
 	_base_sensitivity = (RIG_SCENE.instantiate() as CameraRig).mouse_sensitivity
 	for slot in GameSettings.player_count:
 		_add_player(slot, GameSettings.player_count)
+	sight = SightMap.new()
+	sight.name = "SightMap"
+	add_child(sight)
+	sight.setup(players, $MazeManager as MazeManager)
 	_add_debug_overlay()
 	_add_map()
 	if GameSettings.is_tag_mode():
@@ -122,6 +128,7 @@ func _add_tag() -> void:
 ## results screen when the run is won or lost. A new maze starts a new run.
 func _add_escape() -> void:
 	escape = $EscapeRun
+	escape.sight = sight
 	escape.setup(players, _split)
 	escape.run_won.connect(func(escaped: Array) -> void:
 		var names: Array[String] = []
@@ -133,7 +140,7 @@ func _add_escape() -> void:
 	var gate := SightGate.new()
 	gate.name = "SightGate"
 	add_child(gate)
-	gate.setup(players, $MazeManager as MazeManager)
+	gate.setup(sight, $MazeManager as MazeManager)
 	_add_items()
 	if GameSettings.monsters:
 		_add_monsters()
@@ -164,6 +171,7 @@ func _add_monsters() -> void:
 	add_child(director)
 	director.items = get_node_or_null("ItemScatter") as ItemScatter
 	director.pursuit = $Pursuit
+	director.sight = sight
 	director.setup(players, $MazeManager as MazeManager, escape)
 	var relighting := Relighting.new()
 	relighting.name = "Relighting"

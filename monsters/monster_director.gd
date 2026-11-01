@@ -74,8 +74,6 @@ var _appeared: Dictionary = {}
 ## 0 to 1: how many of the most monsters the director wants right now.
 var tension := 0.0
 var _keys_seen := 0
-## What each prisoner can see now, as sets of cells: the rooms their candle lights, or only their own room without it.
-var _view: Dictionary = {}
 var _immune: Dictionary = {}
 ## Doorways closed by a web: canonical key (see _web_key) -> Web.
 var _webs: Dictionary = {}
@@ -87,12 +85,19 @@ var _noises: Array[Dictionary] = []
 var items: ItemScatter
 ## The chase helper from the tag mode, which the Mimic borrows to lead a prisoner to a Thief.
 var pursuit: Pursuit
+## What each prisoner can see (the rooms their candle lights, or only their own without it). Set it before
+## setup to share the game's; otherwise the director makes its own.
+var sight: SightMap
 
 ## Starts watching `p_manager`'s maze for `p_players`. `p_run` is optional.
 func setup(p_players: Array[Player], p_manager: MazeManager, p_run: EscapeRun = null) -> void:
 	players = p_players
 	manager = p_manager
 	run = p_run
+	if sight == null:
+		sight = SightMap.new()
+		add_child(sight)
+		sight.setup(players, manager)
 	manager.maze_rebuilt.connect(_on_maze_rebuilt)
 	_on_maze_rebuilt()
 
@@ -120,7 +125,6 @@ func _physics_process(delta: float) -> void:
 	if grid == null:
 		return
 	elapsed += delta
-	_update_view()
 	_update_tension(delta)
 	for player in _immune.keys():
 		_immune[player] -= delta
@@ -141,13 +145,6 @@ func _physics_process(delta: float) -> void:
 		_spawn_random()
 
 
-func _update_view() -> void:
-	_view.clear()
-	for player in players:
-		var radius := ceili(player.candle_reach) if player.is_candle_lit() else 0
-		_view[player] = LightField.compute(grid, [{"cell": cell_at(player.global_position), "radius": radius}], false)
-
-
 ## Can a monster in `monster_cell` go after `player`? Only from a lit room (see is_lit): a monster in the
 ## dark ring around the lit rooms wanders until the light reaches it.
 func can_chase(player: Player, monster_cell: Vector2i) -> bool:
@@ -158,7 +155,7 @@ func can_chase(player: Player, monster_cell: Vector2i) -> bool:
 ## doorway when the candle burns, only their own room when it does not? Lit or not, the room is there
 ## and may hold monsters; the player just may not see it.
 func is_lit(player: Player, monster_cell: Vector2i) -> bool:
-	return not _view.has(player) or _view[player].has(monster_cell)
+	return sight.sees(player, monster_cell)
 
 
 ## Is there a room standing at `cell`? A monster in a place with no room is going.

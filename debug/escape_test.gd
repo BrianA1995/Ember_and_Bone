@@ -312,7 +312,7 @@ func _play_dark() -> void:
 		if manager.grid.has_cell(next) and not manager.grid.room_cells(here).has(next):
 			neighbours += 1
 	_check("and the rooms around them are still there", manager.grid.has_cell(here) and (neighbours > 0 or manager.reveal.lit.size() >= around), "%d left" % neighbours)
-	var sight := escape._sight
+	var sight := escape._dark_sight
 	_check("their view goes nearly grey", sight.amount[0] > 0.8 and sight.amount[1] < 0.05, "%s" % [sight.amount])
 	two.warp_to(one.global_position + Vector3(1.0, 0, 0))
 	await _wait(1.2)

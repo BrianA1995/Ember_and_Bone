@@ -76,6 +76,8 @@ var finished := false
 ## How far the gate that is unlocking has got, in seconds (0 when none is).
 var unlock_progress := 0.0
 var players: Array[Player] = []
+## What each prisoner can see. Set it before setup to share the game's; otherwise the run makes its own.
+var sight: SightMap
 ## Called as snuffed_hint.call(player) -> String for what a snuffed prisoner can do ("{interact}" is
 ## replaced by the button's name); set by whoever knows how a candle is lit again.
 var snuffed_hint := Callable()
@@ -88,7 +90,7 @@ var _manager: MazeManager
 var _grid: MazeGrid
 var _huds: Array[EscapeHud] = []
 var _carriers: Array[KeyCarrier] = []
-var _sight: DarkSight
+var _dark_sight: DarkSight
 ## key alcove cell -> its KeyPickup, while the key lies there.
 var _pickups: Dictionary = {}
 ## KeyPickup -> the cell it lies in, for keys a monster let fall (not in an alcove).
@@ -180,6 +182,10 @@ func setup(p_players: Array[Player], split: SplitScreen) -> void:
 	players = p_players
 	_manager = get_tree().get_first_node_in_group("maze_manager") as MazeManager
 	_manager.maze_rebuilt.connect(restart)
+	if sight == null:
+		sight = SightMap.new()
+		add_child(sight)
+		sight.setup(players, _manager)
 	for i in players.size():
 		var hud := EscapeHud.new()
 		split.pane_at(i).add_child(hud)
@@ -189,9 +195,9 @@ func setup(p_players: Array[Player], split: SplitScreen) -> void:
 		var carrier := KeyCarrier.new()
 		players[i].add_child(carrier)
 		_carriers.append(carrier)
-	_sight = DarkSight.new()
-	add_child(_sight)
-	_sight.setup(players, split)
+	_dark_sight = DarkSight.new()
+	add_child(_dark_sight)
+	_dark_sight.setup(players, split)
 	restart()
 
 
@@ -461,9 +467,7 @@ func _someone_in_the_dark() -> bool:
 ## candle only the room they stand in. A room just out of the light, or behind a wall, is not seen.
 func _note_seen() -> void:
 	for player in players:
-		var here := _grid.wrap_cell(RoomDefs.world_to_cell(player.global_position))
-		var radius := ceili(player.candle_reach) if player.is_candle_lit() else 0
-		var lit := LightField.compute(_grid, [{"cell": here, "radius": radius}], false)
+		var lit := sight.cells_for(player)
 		for cell in _pickups:
 			if lit.has(cell):
 				_seen[cell] = true

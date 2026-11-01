@@ -138,7 +138,7 @@ func _sight_and_limits() -> void:
 	var player := _game.players[0]
 	var here := _director.cell_at(player.global_position)
 	await _wait(0.2)
-	var lit_cells: Dictionary = _director._view[player]
+	var lit_cells: Dictionary = _director.sight.cells_for(player)
 	_check("a lit candle lights the room and the rooms joined to it", lit_cells.has(here) and lit_cells.size() > 1, "%d" % lit_cells.size())
 	var dark := _director.reachable(here, 2).keys().filter(func(c: Vector2i) -> bool: return not lit_cells.has(c))
 	if not dark.is_empty():
@@ -149,7 +149,8 @@ func _sight_and_limits() -> void:
 	var lit_change := player.change_distance
 	player.snuff()
 	await _wait(0.2)
-	_check("with the candle out only the player's own room is lit", _director._view[player].size() == _manager.grid.room_cells(here).size() and _director._view[player].has(here), "%d" % _director._view[player].size())
+	var own_room: Dictionary = _director.sight.cells_for(player)
+	_check("with the candle out only the player's own room is lit", own_room.size() == _manager.grid.room_cells(here).size() and own_room.has(here), "%d" % own_room.size())
 	_check("and the rooms around change as they are no longer seen (the distance they must be seen from shrinks)", player.change_distance < lit_change, "%.1f vs %.1f" % [player.change_distance, lit_change])
 	player.relight()
 	await _wait(0.2)

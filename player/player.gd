@@ -116,6 +116,10 @@ var _snuffed := false
 func _ready() -> void:
 	GameInput.ensure_actions()
 	_tint_body()
+	# A body is on its own layer, so cameras and sight lines (which look for the maze, PhysicsLayers.WORLD)
+	# pass through it; it still stops against the maze and against other bodies.
+	collision_layer = PhysicsLayers.BODIES
+	collision_mask = PhysicsLayers.WORLD | PhysicsLayers.BODIES
 	add_to_group("players")
 	add_to_group("light_sources")
 	motion_mode = MOTION_MODE_FLOATING
@@ -320,6 +324,12 @@ func set_candle_lit(on: bool) -> void:
 
 func is_candle_lit() -> bool:
 	return _candle.lit
+
+
+## How many rooms out from the one they stand in this prisoner sees: as far as the candle reaches, or none
+## without it (only their own room).
+func view_radius() -> int:
+	return ceili(candle_reach) if _candle.lit else 0
 
 
 ## A monster puts the candle out. It stays out, whatever the player does with it, until relight().

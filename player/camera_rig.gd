@@ -99,7 +99,7 @@ func _process(delta: float) -> void:
 		Mode.FIRST:
 			_camera.global_transform = Transform3D(_look_basis(), origin + Vector3(0.0, eye_height, 0.0))
 		Mode.THIRD:
-			_camera.global_transform = Transform3D(_look_basis(), _third_person_position(followed, origin))
+			_camera.global_transform = Transform3D(_look_basis(), _third_person_position(origin))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -205,13 +205,11 @@ func _look_basis() -> Basis:
 
 
 ## Behind the player along the look direction, pulled in if a wall is in the way.
-func _third_person_position(target: Node3D, origin: Vector3) -> Vector3:
+func _third_person_position(origin: Vector3) -> Vector3:
 	var pivot := origin + Vector3(0.0, third_pivot_height, 0.0)
 	var desired := pivot + _look_basis() * Vector3(0.0, 0.0, third_distance)
-	var query := PhysicsRayQueryParameters3D.create(pivot, desired)
-	if target is CollisionObject3D:
-		var skip: Array[RID] = [(target as CollisionObject3D).get_rid()]
-		query.exclude = skip
+	# The camera only gives way to the maze, never to a body (a teammate behind would pull it in against them).
+	var query := PhysicsRayQueryParameters3D.create(pivot, desired, PhysicsLayers.WORLD)
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty():
 		return desired

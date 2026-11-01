@@ -63,7 +63,7 @@ func _draw_item(box: Rect2, kind: StringName, count: int) -> void:
 	draw_rect(inner, color.darkened(0.35))
 	draw_rect(inner, color, false, 2.0)
 	var font := ThemeDB.fallback_font
-	var letter := ItemDefs.label(kind).substr(0, 1)
+	var letter := ItemDefs.letter(kind)
 	draw_string(font, inner.position + Vector2(0.0, inner.size.y * 0.72), letter, HORIZONTAL_ALIGNMENT_CENTER, inner.size.x, 26, Color.WHITE)
 	if count > 1:
 		draw_string(font, box.position + Vector2(0.0, SLOT - 4.0), str(count), HORIZONTAL_ALIGNMENT_RIGHT, SLOT - 6.0, 18, MenuTheme.INK)
