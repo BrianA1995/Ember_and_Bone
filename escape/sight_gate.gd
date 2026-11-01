@@ -21,4 +21,4 @@ func _physics_process(_delta: float) -> void:
 	var grid := _manager.grid
 	for node in get_tree().get_nodes_in_group(GROUP):
 		var thing := node as Node3D
-		thing.visible = _sight.anyone_sees(grid.wrap_cell(RoomDefs.world_to_cell(thing.global_position)))
+		thing.visible = _sight.anyone_sees(grid.cell_at(thing.global_position))

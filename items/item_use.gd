@@ -95,7 +95,7 @@ func _use(player: Player) -> void:
 func _drop(player: Player) -> void:
 	var held := escape.held_item(player.slot)
 	var spot := player.global_position + player.facing() * drop_distance
-	var cell := _manager.grid.wrap_cell(RoomDefs.world_to_cell(spot))
+	var cell := _manager.grid.cell_at(spot)
 	if held.type == &"key":
 		escape.put_down_key(player, spot, cell)
 	elif held.type == &"item":
@@ -109,7 +109,7 @@ func _drop(player: Player) -> void:
 
 func _set_lamp(player: Player) -> void:
 	var spot := player.global_position + player.facing() * drop_distance
-	var room := _manager.view.room_at(_manager.grid.wrap_cell(RoomDefs.world_to_cell(spot)))
+	var room := _manager.view.room_at(_manager.grid.cell_at(spot))
 	if room == null or not bag.take(player.slot, &"lamp"):
 		return
 	var lamp := Lamp.new()

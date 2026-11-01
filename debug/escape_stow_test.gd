@@ -30,7 +30,7 @@ func _ready() -> void:
 				player.warp_to(pickup.global_position - Vector3(0.0, 0.2, 0.0))
 				await _wait(0.1)
 				break
-		var here := manager.grid.wrap_cell(RoomDefs.world_to_cell(player.global_position))
+		var here := manager.grid.cell_at(player.global_position)
 		var open: Array[Vector2i] = []
 		for side in RoomDefs.SIDE_COUNT:
 			var next := manager.grid.neighbor(here, side)

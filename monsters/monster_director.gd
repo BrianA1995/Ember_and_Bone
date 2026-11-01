@@ -350,7 +350,7 @@ func _on_cell_removed(cell: Vector2i) -> void:
 
 ## The cell a point is in (the maze wraps).
 func cell_at(position: Vector3) -> Vector2i:
-	return grid.wrap_cell(RoomDefs.world_to_cell(position))
+	return grid.cell_at(position)
 
 
 ## The way from `from` to `to` on the floor plane, the short way round the loop of the maze.

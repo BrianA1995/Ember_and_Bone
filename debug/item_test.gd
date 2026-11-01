@@ -155,7 +155,7 @@ func _using() -> void:
 	var player := _game.players[0]
 	var escape := _game.escape
 	var use := _game.get_node("ItemUse") as ItemUse
-	var cell := _manager.grid.wrap_cell(RoomDefs.world_to_cell(player.global_position))
+	var cell := _manager.grid.cell_at(player.global_position)
 	var room := _manager.view.room_at(cell)
 	_bag.setup(1)
 	player.relight()
@@ -177,7 +177,7 @@ func _using() -> void:
 	escape.equipped[0] = 1
 	use._drop(player)
 	_check("a dropped stack leaves the pack", _bag.count(0, &"matches") == 0, "")
-	var lying := _manager.view.room_at(_manager.grid.wrap_cell(RoomDefs.world_to_cell(player.global_position + player.facing() * 0.7))).find_children("*", "ItemPickup", false, false)
+	var lying := _manager.view.room_at(_manager.grid.cell_at(player.global_position + player.facing() * 0.7)).find_children("*", "ItemPickup", false, false)
 	_check("and lies on the floor ahead", lying.size() >= 1, "%d" % lying.size())
 	await _wait(0.3)
 	_check("it is not taken straight back", _bag.count(0, &"matches") == 0, "")

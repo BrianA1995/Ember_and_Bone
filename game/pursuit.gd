@@ -153,8 +153,8 @@ func _find_nearest_prey() -> void:
 		if apart.length() < best:
 			best = apart.length()
 			_to_prey = apart
-			_target_cell = _grid.wrap_cell(RoomDefs.world_to_cell(other.global_position))
-	_hunter_cell = _grid.wrap_cell(RoomDefs.world_to_cell(hunter.global_position))
+			_target_cell = _grid.cell_at(other.global_position)
+	_hunter_cell = _grid.cell_at(hunter.global_position)
 
 
 ## Lays a route while the hunter is lost enough, takes it away when they are not.

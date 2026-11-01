@@ -88,7 +88,7 @@ func _play() -> void:
 					picked = escape.keys_held[0] == 1
 					break
 		var open: Array[Vector2i] = []
-		var here := manager.grid.wrap_cell(RoomDefs.world_to_cell(walker.global_position))
+		var here := manager.grid.cell_at(walker.global_position)
 		for side in RoomDefs.SIDE_COUNT:
 			var next := manager.grid.neighbor(here, side)
 			if manager.grid.is_open(here, side) and manager.grid.has_cell(next):

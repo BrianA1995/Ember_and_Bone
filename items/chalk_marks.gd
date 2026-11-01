@@ -40,7 +40,7 @@ func _restart() -> void:
 
 ## Writes `text` on the wall `player` faces, in the room they stand in. False if there is no room.
 func mark(player: Player, text: String) -> bool:
-	var cell := _grid.wrap_cell(RoomDefs.world_to_cell(player.global_position))
+	var cell := _grid.cell_at(player.global_position)
 	var data := _grid.get_cell(cell)
 	if data.is_empty() or RoomDefs.is_special(data.piece) or _marks.has(data.anchor):
 		return false

@@ -43,7 +43,7 @@ func _ready() -> void:
 				for i in 6:
 					await get_tree().physics_frame
 				break
-		var here := manager.grid.wrap_cell(RoomDefs.world_to_cell(player.global_position))
+		var here := manager.grid.cell_at(player.global_position)
 		var open: Array[int] = []
 		for side in RoomDefs.SIDE_COUNT:
 			if manager.grid.is_open(here, side) and manager.grid.has_cell(manager.grid.neighbor(here, side)):

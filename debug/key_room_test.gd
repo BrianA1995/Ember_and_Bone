@@ -37,7 +37,7 @@ func _ready() -> void:
 			if data.is_empty() or data.piece != &"key_alcove" or exits != 1 or pickup.get_parent() != manager.view.room_at(cell):
 				bad += 1
 				print("  BAD: key at %s in %s with %d exits" % [cell, data.get("piece"), exits])
-		var here := manager.grid.wrap_cell(RoomDefs.world_to_cell(player.global_position))
+		var here := manager.grid.cell_at(player.global_position)
 		var open: Array[int] = []
 		for side in RoomDefs.SIDE_COUNT:
 			if manager.grid.is_open(here, side) and manager.grid.has_cell(manager.grid.neighbor(here, side)):

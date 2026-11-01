@@ -117,6 +117,11 @@ func wrap_cell(cell: Vector2i) -> Vector2i:
 			posmod(cell.y - bounds.position.y, bounds.size.y))
 
 
+## The room cell a point in the world lies in, wrapped into the maze.
+func cell_at(position: Vector3) -> Vector2i:
+	return wrap_cell(RoomDefs.world_to_cell(position))
+
+
 ## True if you can walk through this side of the cell (drawn open and not blocked).
 func is_open(cell: Vector2i, side: int) -> bool:
 	if not _cells.has(cell):

@@ -598,7 +598,7 @@ func _with_keys(list: Array[Player]) -> Array[Player]:
 
 ## The anchor of the gate `player` stands in, or null.
 func _gate_around(player: Player) -> Variant:
-	var cell := _grid.wrap_cell(RoomDefs.world_to_cell(player.global_position))
+	var cell := _grid.cell_at(player.global_position)
 	return _gate_cells.get(cell)
 
 

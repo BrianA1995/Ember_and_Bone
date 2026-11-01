@@ -28,7 +28,7 @@ func setup(p_players: Array[Player], p_manager: MazeManager) -> void:
 func cells_for(player: Player) -> Dictionary:
 	if _grid == null:
 		return {}
-	var cell := _grid.wrap_cell(RoomDefs.world_to_cell(player.global_position))
+	var cell := _grid.cell_at(player.global_position)
 	var radius := player.view_radius()
 	var kept: Dictionary = _kept.get(player, {})
 	if kept.get("cell") != cell or kept.get("radius") != radius or kept.get("revision") != _revision:
